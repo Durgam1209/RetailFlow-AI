@@ -590,30 +590,43 @@ class _SalesHomePageState extends State<SalesHomePage> {
     return '${now.day} ${months[now.month - 1]} ${now.year}';
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('RetailFlow AI'),
+          title: const Text(
+            'RetailFlow AI',
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 20,
+            ),
+          ),
           bottom: const TabBar(
+            labelColor: Color(0xFF1F1B18),
+            unselectedLabelColor: Color(0xFF6A5F57),
+            indicatorColor: Color(0xFF2E2722),
+            labelStyle: TextStyle(fontWeight: FontWeight.w800),
             tabs: [
               Tab(icon: Icon(Icons.shopping_cart), text: 'Sales'),
               Tab(icon: Icon(Icons.insights), text: 'AI Insights'),
             ],
           ),
         ),
-        body: TabBarView(children: [_buildSalesTab(), const InsightsScreen()]),
+        body: TabBarView(
+          children: [_buildSalesTab(), const InsightsScreen()],
+        ),
       ),
     );
   }
 
-  Widget _buildSalesTab() {
+Widget _buildSalesTab() {
     final statusColor = _statusColor();
     final statusText = _statusText();
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       body: Stack(
         children: <Widget>[
           const _Backdrop(),
@@ -621,219 +634,225 @@ class _SalesHomePageState extends State<SalesHomePage> {
             child: Column(
               children: <Widget>[
                 Expanded(
-                  child: CustomScrollView(
-                    slivers: <Widget>[
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              _HeroHeader(
-                                todayLabel: _todayLabel,
-                                statusColor: statusColor,
-                                statusText: statusText,
-                                isOnline: _isOnline,
-                                syncActionLabel: _syncActionLabel(),
-                                onSyncTap:
-                                    widget.syncService.isConfigured &&
-                                        _isOnline &&
-                                        !_isSyncing
-                                    ? _syncPendingSales
-                                    : null,
-                              ),
-                              const SizedBox(height: 14),
-                              Row(
+                  child: RefreshIndicator(
+                    color: const Color(0xFF2E2722),
+                    backgroundColor: Colors.white,
+                    onRefresh: () async {
+                      HapticFeedback.mediumImpact();
+                      _reloadCatalog();
+                      await Future.delayed(const Duration(milliseconds: 300));
+                    },
+                    child: CustomScrollView(
+                      slivers: <Widget>[
+                        SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
-                                  Expanded(
-                                    child: _SummaryCard(
-                                      label: 'Total Weight',
-                                      value:
-                                          '${_totalQuantity.toStringAsFixed(1)} kg',
-                                      icon: Icons.scale_rounded,
-                                      accent: const Color(0xFFFFE1B6),
-                                    ),
+                                  _HeroHeader(
+                                    todayLabel: _todayLabel,
+                                    statusColor: statusColor,
+                                    statusText: statusText,
+                                    isOnline: _isOnline,
+                                    syncActionLabel: _syncActionLabel(),
+                                    onSyncTap:
+                                        widget.syncService.isConfigured &&
+                                            _isOnline &&
+                                            !_isSyncing
+                                        ? _syncPendingSales
+                                        : null,
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: _SummaryCard(
-                                      label: 'Total Amount',
-                                      value:
-                                          'Rs ${_totalAmount.toStringAsFixed(0)}',
-                                      icon: Icons.payments_rounded,
-                                      accent: const Color(0xFFFFC6B8),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 18),
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.92),
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                    color: Colors.black,
-                                    width: 1.5,
-                                  ),
-                                ),
-                                child: TextField(
-                                  controller: _searchController,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _searchQuery = value;
-                                    });
-                                  },
-                                  decoration: const InputDecoration(
-                                    hintText: 'Search produce',
-                                    prefixIcon: Icon(Icons.search_rounded),
-                                    border: InputBorder.none,
-                                    contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 14,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 18),
-                              Row(
-                                children: <Widget>[
-                                  const Expanded(
-                                    child: Text(
-                                      'Produce Counter',
-                                      style: TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w800,
+                                  const SizedBox(height: 14),
+                                  Row(
+                                    children: <Widget>[
+                                      Expanded(
+                                        child: _SummaryCard(
+                                          label: 'Total Weight',
+                                          value:
+                                              '${_totalQuantity.toStringAsFixed(1)} kg',
+                                          icon: Icons.scale_rounded,
+                                          accent: const Color(0xFFFFE1B6),
+                                        ),
                                       ),
-                                    ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: _SummaryCard(
+                                          label: 'Total Amount',
+                                          value:
+                                              'Rs ${_totalAmount.toStringAsFixed(0)}',
+                                          icon: Icons.payments_rounded,
+                                          accent: const Color(0xFFFFC6B8),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  OutlinedButton.icon(
-                                    onPressed: _openManageProducts,
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: Colors.black,
-                                      side: const BorderSide(
+                                  const SizedBox(height: 18),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.92),
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
                                         color: Colors.black,
                                         width: 1.5,
                                       ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 12,
+                                    ),
+                                    child: TextField(
+                                      controller: _searchController,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _searchQuery = value;
+                                        });
+                                      },
+                                      decoration: const InputDecoration(
+                                        hintText: 'Search produce',
+                                        prefixIcon: Icon(Icons.search_rounded),
+                                        border: InputBorder.none,
+                                        contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 14,
+                                        ),
                                       ),
                                     ),
-                                    icon: const Icon(
-                                      Icons.tune_rounded,
-                                      size: 18,
-                                    ),
-                                    label: const Text(
-                                      'Manage',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w900,
+                                  ),
+                                  const SizedBox(height: 18),
+                                  Row(
+                                    children: <Widget>[
+                                      const Expanded(
+                                        child: Text(
+                                          'Produce Counter',
+                                          style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                                      OutlinedButton.icon(
+                                        onPressed: _openManageProducts,
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.black,
+                                          side: const BorderSide(
+                                            color: Colors.black,
+                                            width: 1.5,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 12,
+                                          ),
+                                        ),
+                                        icon: const Icon(
+                                          Icons.tune_rounded,
+                                          size: 18,
+                                        ),
+                                        label: const Text(
+                                          'Manage',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 14),
+                                  _CurrentBillPanel(
+                                    items: _draftCatalogItems,
+                                    totalQuantity: _totalQuantity,
+                                    totalAmount: _totalAmount,
+                                    quantityFor: _quantityFor,
+                                    metricFor: _metricFor,
+                                    lineTotalFor: _lineTotalFor,
+                                    onEditWeight: _editWeight,
+                                    onEditPrice: _editPrice,
+                                    onRemoveLine: _removeDraftLine,
+                                    onClearAll: _draftCatalogItems.isEmpty
+                                        ? null
+                                        : _clearCurrentBill,
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 14),
-                              _CurrentBillPanel(
-                                items: _draftCatalogItems,
-                                totalQuantity: _totalQuantity,
-                                totalAmount: _totalAmount,
-                                quantityFor: _quantityFor,
-                                metricFor: _metricFor,
-                                lineTotalFor: _lineTotalFor,
-                                onEditWeight: _editWeight,
-                                onEditPrice: _editPrice,
-                                onRemoveLine: _removeDraftLine,
-                                onClearAll: _draftCatalogItems.isEmpty
-                                    ? null
-                                    : _clearCurrentBill,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      SliverLayoutBuilder(
-                        builder: (context, constraints) {
-                          final width = constraints.crossAxisExtent;
-                          final crossAxisCount = width < 430
-                              ? 1
-                              : width < 900
-                              ? 2
-                              : 3;
-                          final childAspectRatio = crossAxisCount == 1
-                              ? 1.28
-                              : crossAxisCount == 2
-                              ? 0.94
-                              : 0.96;
-
-                          return SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-                            sliver: SliverGrid(
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: crossAxisCount,
-                                    mainAxisSpacing: 16,
-                                    crossAxisSpacing: 16,
-                                    childAspectRatio: childAspectRatio,
-                                  ),
-                              delegate: SliverChildBuilderDelegate((
-                                context,
-                                index,
-                              ) {
-                                final fruit = _visibleCatalog[index];
-                                return FruitTile(
-                                  fruit: fruit,
-                                  quantityKg: _quantityFor(fruit),
-                                  displayMetric: _metricFor(fruit),
-                                  unitPrice: _priceFor(fruit),
-                                  lineTotal: _lineTotalFor(fruit),
-                                  onEditWeight: () => _editWeight(fruit),
-                                  onIncrement: () => _incrementFruit(
-                                    fruit,
-                                    fruit.defaultIncrement,
-                                  ),
-                                  onDecrement: () => _decrementFruit(fruit),
-                                  onEditPrice: () => _editPrice(fruit),
-                                );
-                              }, childCount: _visibleCatalog.length),
                             ),
-                          );
-                        },
+                          ),
+                          SliverLayoutBuilder(
+                            builder: (context, constraints) {
+                              final width = constraints.crossAxisExtent;
+                              final crossAxisCount = width < 430
+                                  ? 1
+                                  : width < 900
+                                  ? 2
+                                  : 3;
+                              final childAspectRatio = crossAxisCount == 1
+                                  ? 1.1
+                                  : crossAxisCount == 2
+                                  ? 0.8
+                                  : 0.82;
+
+                              return SliverPadding(
+                                padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                                sliver: SliverGrid(
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: crossAxisCount,
+                                        mainAxisSpacing: 16,
+                                        crossAxisSpacing: 16,
+                                        childAspectRatio: childAspectRatio,
+                                      ),
+                                  delegate: SliverChildBuilderDelegate((
+                                    context,
+                                    index,
+                                  ) {
+                                    final fruit = _visibleCatalog[index];
+                                    return FruitTile(
+                                      fruit: fruit,
+                                      quantityKg: _quantityFor(fruit),
+                                      displayMetric: _metricFor(fruit),
+                                      unitPrice: _priceFor(fruit),
+                                      lineTotal: _lineTotalFor(fruit),
+                                      onEditWeight: () => _editWeight(fruit),
+                                      onIncrement: () => _incrementFruit(
+                                        fruit,
+                                        fruit.defaultIncrement,
+                                      ),
+                                      onDecrement: () => _decrementFruit(fruit),
+                                      onEditPrice: () => _editPrice(fruit),
+                                    );
+                                  }, childCount: _visibleCatalog.length),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
                 ),
-                Container(
-                  color: Colors.transparent,
+                Padding(
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                  child: SafeArea(
-                    top: false,
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 68,
-                      child: FilledButton.icon(
-                        onPressed: _draftCatalogItems.isEmpty
-                            ? null
-                            : _finishTransaction,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF2E2722),
-                          foregroundColor: Colors.white,
-                          textStyle: const TextStyle(
-                            fontSize: 18,
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: FilledButton.icon(
+                      onPressed: _draftCatalogItems.isEmpty
+                          ? null
+                          : _finishTransaction,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF2E2722),
+                        foregroundColor: Colors.white,
+                        textStyle: const TextStyle(
+                          fontSize: 16,
                             fontWeight: FontWeight.w800,
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
                           ),
                         ),
-                        icon: const Icon(Icons.receipt_long, size: 28),
+                        icon: const Icon(Icons.receipt_long, size: 24),
                         label: const Text('Finish Transaction'),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          
         ],
       ),
     );

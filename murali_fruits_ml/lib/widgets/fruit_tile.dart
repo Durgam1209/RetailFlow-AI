@@ -47,10 +47,11 @@ class FruitTile extends StatelessWidget {
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
+            // Header: Fruit name and icon
             Row(
               children: <Widget>[
                 _IconBadge(
@@ -58,106 +59,147 @@ class FruitTile extends StatelessWidget {
                   backgroundColor: palette.soft,
                   foregroundColor: palette.primary,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Text(
+                    fruit.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF1F1B18),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            
+            // Details section: Weight, Price, Line Total
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F4EE),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: <Widget>[
+                  // Weight and Price row
+                  Row(
                     children: <Widget>[
-                      Text(
-                        fruit.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF1F1B18),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              'Weight',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF7B6F65),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            GestureDetector(
+                              onTap: onEditWeight,
+                              child: Text(
+                                _formatQuantity(quantityKg, displayMetric),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1F1B18),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '+${_formatIncrement(fruit.defaultIncrement)} kg per tap',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF7B6F65),
+                      Container(
+                        height: 24,
+                        width: 1,
+                        color: Color(0xFFE5DED3),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                'Price/kg',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF7B6F65),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              GestureDetector(
+                                onTap: onEditPrice,
+                                child: Text(
+                                  'Rs ${unitPrice.toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF1F1B18),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: _InfoChip(
-                    label: 'Weight',
-                    value: _formatQuantity(quantityKg, displayMetric),
-                    icon: Icons.scale_rounded,
-                    tint: palette.soft,
-                    onTap: onEditWeight,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _InfoChip(
-                    label: 'Price',
-                    value: 'Rs ${unitPrice.toStringAsFixed(0)} / kg',
-                    icon: Icons.currency_rupee_rounded,
-                    tint: const Color(0xFFF4EFE8),
-                    onTap: onEditPrice,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8F4EE),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Row(
-                children: <Widget>[
-                  const Text(
-                    'Line total',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF7B6F65),
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Rs ${lineTotal.toStringAsFixed(0)}',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF1F1B18),
-                    ),
+                  const SizedBox(height: 8),
+                  Divider(height: 1, color: Color(0xFFE5DED3)),
+                  const SizedBox(height: 8),
+                  // Line Total row
+                  Row(
+                    children: <Widget>[
+                      const Text(
+                        'Total',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF7B6F65),
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        'Rs ${lineTotal.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF1F1B18),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 8),
+            
+            // Action buttons
             Row(
               children: <Widget>[
                 Expanded(
                   child: _ActionButton(
-                    label: '-',
+                    label: '−',
                     backgroundColor: const Color(0xFFF4EFE8),
                     foregroundColor: const Color(0xFF1F1B18),
                     borderColor: const Color(0xFFE6DDD1),
                     onTap: onDecrement,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 6),
                 Expanded(
                   flex: 2,
                   child: _ActionButton(
-                    label: 'Add ${_formatIncrement(fruit.defaultIncrement)} kg',
+                    label: '+${_formatIncrement(fruit.defaultIncrement)} kg',
                     backgroundColor: palette.primary,
                     foregroundColor: Colors.white,
                     borderColor: palette.primary,
