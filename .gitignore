@@ -1,0 +1,43 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Environment / secrets
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock
+build/
+
+# Generated platform artifacts
+**/ephemeral/
+**/Generated.xcconfig
+**/Flutter-Generated.xcconfig
+**/flutter_export_environment.sh
+
+# Logs / temp
+*.log
+*.tmp
+*.temp
+

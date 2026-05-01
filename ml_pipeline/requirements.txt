@@ -1,0 +1,7 @@
+pandas
+supabase
+prophet
+mlxtend
+holidays
+requests
+python-dotenv
