@@ -19,6 +19,16 @@ __pycache__/
 venv/
 env/
 
+# Local data / model artifacts
+data/
+ml_pipeline/data/
+*.csv
+*.parquet
+*.pkl
+*.joblib
+*.sqlite
+*.db
+
 # Jupyter
 .ipynb_checkpoints/
 
@@ -40,4 +50,3 @@ build/
 *.log
 *.tmp
 *.temp
-
