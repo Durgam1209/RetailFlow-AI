@@ -57,7 +57,7 @@ Pipeline Complete. Insights are ready!!
 
 ```powershell
 cd C:\projects\RetailFlowAI\murali_fruits_ml
-flutter run --dart-define=SUPABASE_URL=https://yswbklftnuioiwhbjsgv.supabase.co --dart-define=SUPABASE_ANON_KEY=<your_anon_key>
+flutter run --dart-define=SUPABASE_URL=your_supabase_url --dart-define=SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 Open the **AI Insights** tab to see the recommendations.

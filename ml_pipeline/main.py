@@ -16,11 +16,21 @@ dotenv.load_dotenv()
 # Get the directory where this script is located
 SCRIPT_DIR = Path(__file__).parent
 
-URL = os.getenv("SUPABASE_URL", "https://yswbklftnuioiwhbjsgv.supabase.co")
-# Try to use service role key first (for secure backend writes), fall back to anon key
-KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlzd2JrbGZ0bnVpb2l3aGJqc2d2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4MjY3OTUsImV4cCI6MjA4OTQwMjc5NX0.ezZh3VeoTS7WZH8p_xP_uXiKreSVK62BBqK7UEG9zJg")
+def _require_env(name):
+    value = os.getenv(name)
+    if value:
+        return value
+    raise RuntimeError(
+        f"Missing required environment variable: {name}. "
+        f"Add it to {SCRIPT_DIR / '.env'} before running the pipeline."
+    )
 
-supabase = create_client(URL,KEY)
+
+URL = _require_env("SUPABASE_URL")
+# Try to use service role key first (for secure backend writes), fall back to anon key
+KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or _require_env("SUPABASE_KEY")
+
+supabase = create_client(URL, KEY)
 
 FESTIVAL_FRUIT_MAP = {
     "diwali": ["Apple Washington", "Apple Poland", "Pomegranate", "Banana"],
