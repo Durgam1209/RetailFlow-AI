@@ -228,6 +228,4 @@ For more detailed setup help, see [INSIGHTS_SETUP.md](INSIGHTS_SETUP.md).
 - richer festival-specific demand logic
 - history cleanup for previously committed local data if needed
 
-## License
 
-No license file is currently included in this repo.
