@@ -1,6 +1,6 @@
 import pandas as pd
 from prophet import Prophet
-
+from sklearn.metrics import mean_absolute_error
 
 MIN_PROPHET_DAYS = 14
 
@@ -85,3 +85,23 @@ def run_demand_forecasting(df):
     forecast['model_basis'] = 'sales trend model'
 
     return forecast[['ds', 'yhat', 'yhat_upper', 'yhat_lower', 'model_basis']]
+
+def calculate_performance_metrics(daily_df, forecast_df):
+    """Compare recent actual sales to previous predictions."""
+    # Align actuals and predictions on the date (ds)
+    actuals = daily_df[['ds', 'y']].copy()
+    preds = forecast_df[['ds', 'yhat']].copy()
+    
+    merged = actuals.merge(preds, on='ds', how='inner')
+    
+    if merged.empty:
+        return "Not enough overlapping data for performance metrics."
+
+    mae = mean_absolute_error(merged['y'], merged['yhat'])
+    accuracy_pct = max(0, 100 - (mae / merged['y'].mean() * 100)) if merged['y'].mean() > 0 else 0
+    
+    return {
+        "mae": round(mae, 2),
+        "accuracy_score": f"{round(accuracy_pct, 1)}%",
+        "sample_size": len(merged)
+    }

@@ -566,6 +566,18 @@ def insert_daily_insight(insight_data):
         print("Run sql/setup_daily_insights_table.sql to enable festival banners.")
         return supabase.table("daily_insights").insert(fallback_data).execute()
 
+def log_performance(metrics):
+    log_path = SCRIPT_DIR / "logs" / "performance_history.csv"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    log_entry = pd.DataFrame([{
+        "timestamp": datetime.now().isoformat(),
+        **metrics
+    }])
+    
+    # Append to log or create new if doesn't exist
+    log_entry.to_csv(log_path, mode='a', header=not log_path.exists(), index=False)
+
 def main():
 
     print("Starting RetailFlow AI intelligence pipeline...")
