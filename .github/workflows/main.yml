@@ -44,6 +44,11 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add ml_pipeline/data/processed/master_training_data.csv
-          git commit -m "Automated Data Sync: $(date +'%Y-%m-%d')" || echo "No data changes"
-          git push # Saves the fresh CSV back to your GitHub
+          
+          # Use the -f (force) flag to bypass .gitignore for this specific file
+          git add -f ml_pipeline/data/processed/master_training_data.csv
+          
+          # Commit only if there are actual data changes to avoid empty commit errors
+          git commit -m "Automated Data Sync: $(date +'%Y-%m-%d')" || echo "No data changes to commit"
+          
+          git push
