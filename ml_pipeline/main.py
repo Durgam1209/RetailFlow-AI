@@ -7,6 +7,8 @@ import dotenv
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import holidays
+import time
+import httpx
 from models.basket_analyzer import run_basket_analysis
 from models.demand_forecaster import run_demand_forecasting
 
@@ -29,6 +31,12 @@ def _require_env(name):
 URL = _require_env("SUPABASE_URL")
 # Try to use service role key first (for secure backend writes), fall back to anon key
 KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or _require_env("SUPABASE_KEY")
+
+# Configure HTTP client with proper timeout and SSL settings
+http_client = httpx.Client(
+    timeout=30.0,
+    verify=True,
+)
 
 supabase = create_client(URL, KEY)
 
@@ -73,6 +81,20 @@ DEFAULT_FRUIT_PRICES = {
     "Watermelon": 35,
     "Watermelon Kiran": 45,
 }
+
+
+def _retry_with_backoff(func, max_retries=3, initial_delay=1):
+    """Retry a function with exponential backoff"""
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise
+            delay = initial_delay * (2 ** attempt)
+            print(f"Attempt {attempt + 1} failed: {str(e)}")
+            print(f"Retrying in {delay} seconds...")
+            time.sleep(delay)
 
 
 def _safe_float(value, fallback=0.0):
@@ -255,13 +277,29 @@ def get_festival_advice(df, today=None):
     }
 
 def fetch_and_prepare_data():
-
-    #pulling the data from sales_log table
-    response = supabase.table("sales_log").select("*").execute()
-    df = pd.DataFrame(response.data)
+    """Fetch sales data from Supabase with retry logic"""
+    
+    def _fetch_from_supabase():
+        print("Fetching sales data from Supabase...")
+        response = supabase.table("sales_log").select("*").execute()
+        return response
+    
+    try:
+        response = _retry_with_backoff(_fetch_from_supabase, max_retries=3)
+        df = pd.DataFrame(response.data)
+        print(f"Successfully fetched {len(df)} records from sales_log")
+    except Exception as e:
+        print(f"Failed to fetch from Supabase after 3 retries: {str(e)}")
+        print("Check that SUPABASE_URL and SUPABASE_KEY environment variables are set correctly.")
+        raise
+    
     csv_path = SCRIPT_DIR / 'data' / 'processed' / 'master_training_data.csv'
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Training data not found at {csv_path}")
+    
     enriched_df = pd.read_csv(csv_path)
-    return df,enriched_df
+    print(f"Loaded {len(enriched_df)} training records from CSV")
+    return df, enriched_df
 
 def format_basket_rules(rules_df):
     """Convert association rules into readable bundle suggestions"""

@@ -596,12 +596,21 @@ class _SalesHomePageState extends State<SalesHomePage> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text(
-            'RetailFlow AI',
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 20,
-            ),
+          title: Row(
+            children: [
+              Image.asset(
+                'assets/images/logo.png',
+                height: 40,
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'RetailFlow AI',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 20,
+                ),
+              ),
+            ],
           ),
           bottom: const TabBar(
             labelColor: Color(0xFF1F1B18),
@@ -783,8 +792,8 @@ Widget _buildSalesTab() {
                               final childAspectRatio = crossAxisCount == 1
                                   ? 1.1
                                   : crossAxisCount == 2
-                                  ? 0.8
-                                  : 0.82;
+                                  ? 1.3
+                                  : 1.1;
 
                               return SliverPadding(
                                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
