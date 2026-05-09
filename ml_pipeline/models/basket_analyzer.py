@@ -46,7 +46,7 @@ def run_basket_analysis(df):
     min_support = max(0.05, 2 / transaction_count)
 
     # Find frequent itemsets
-    frequent_itemsets = apriori(basket_sets, min_support=min_support, use_colnames=True)
+    frequent_itemsets = apriori(basket_sets, min_support=min_support, use_colnames=True,max_len=3)
     
     # Handle case where no frequent itemsets are found
     if len(frequent_itemsets) == 0:
