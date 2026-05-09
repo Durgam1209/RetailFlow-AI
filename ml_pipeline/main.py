@@ -34,7 +34,7 @@ KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or _require_env("SUPABASE_KEY")
 
 # Configure HTTP client with proper timeout and SSL settings
 http_client = httpx.Client(
-    timeout=30.0,
+    timeout=60.0,
     verify=True,
 )
 
@@ -83,13 +83,30 @@ DEFAULT_FRUIT_PRICES = {
 }
 
 
-def _retry_with_backoff(func, max_retries=3, initial_delay=1):
-    """Retry a function with exponential backoff"""
+def _retry_with_backoff(func, max_retries=5, initial_delay=2):
+    """Retry a function with exponential backoff, optimized for connection timeouts"""
+    import httpcore
+    from httpx import ConnectTimeout
+    
     for attempt in range(max_retries):
         try:
             return func()
-        except Exception as e:
+        except (ConnectTimeout, httpcore.ConnectTimeout, TimeoutError) as e:
+            # Connection timeout - worth retrying with longer delays
             if attempt == max_retries - 1:
+                print(f"Failed after {max_retries} attempts. Connection timeouts may indicate:")
+                print("  - Supabase service is down or overloaded")
+                print("  - Network connectivity issue")
+                print("  - Firewall or proxy blocking the connection")
+                print("  - DNS resolution issues")
+                raise
+            delay = initial_delay * (2 ** attempt)
+            print(f"Attempt {attempt + 1} failed with timeout: {type(e).__name__}")
+            print(f"Retrying in {delay} seconds...")
+            time.sleep(delay)
+        except Exception as e:
+            # Other exceptions - only retry a couple times
+            if attempt >= max_retries - 2:
                 raise
             delay = initial_delay * (2 ** attempt)
             print(f"Attempt {attempt + 1} failed: {str(e)}")
@@ -281,16 +298,23 @@ def fetch_and_prepare_data():
     
     def _fetch_from_supabase():
         print("Fetching sales data from Supabase...")
+        print(f"Connecting to: {URL}")
         response = supabase.table("sales_log").select("*").execute()
         return response
     
     try:
-        response = _retry_with_backoff(_fetch_from_supabase, max_retries=3)
+        response = _retry_with_backoff(_fetch_from_supabase, max_retries=5)
         df = pd.DataFrame(response.data)
         print(f"Successfully fetched {len(df)} records from sales_log")
     except Exception as e:
-        print(f"Failed to fetch from Supabase after 3 retries: {str(e)}")
-        print("Check that SUPABASE_URL and SUPABASE_KEY environment variables are set correctly.")
+        print(f"\nERROR: Failed to connect to Supabase")
+        print(f"Exception: {str(e)}\n")
+        print("Troubleshooting steps:")
+        print("1. Verify SUPABASE_URL and SUPABASE_KEY are set in .env")
+        print("2. Check your internet connection")
+        print("3. Verify the Supabase project is accessible")
+        print("4. Check if your IP is blocked by firewall/proxy")
+        print("5. Visit https://status.supabase.com to check service status\n")
         raise
     
     csv_path = SCRIPT_DIR / 'data' / 'processed' / 'master_training_data.csv'
@@ -524,7 +548,6 @@ def format_forecast_advice(forecast_df):
 def build_forecast_summary(stock_advice):
     if not stock_advice:
         return "Add a few more sales to generate a reliable demand forecast."
-
     average_revenue = round(
         sum(item.get("expected_revenue", 0) for item in stock_advice)
         / len(stock_advice)
@@ -569,14 +592,15 @@ def insert_daily_insight(insight_data):
 def log_performance(metrics):
     log_path = SCRIPT_DIR / "logs" / "performance_history.csv"
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     log_entry = pd.DataFrame([{
         "timestamp": datetime.now().isoformat(),
         **metrics
     }])
-    
-    # Append to log or create new if doesn't exist
-    log_entry.to_csv(log_path, mode='a', header=not log_path.exists(), index=False)
+
+    # Write header only if file is new or empty
+    file_is_new = not log_path.exists() or log_path.stat().st_size == 0
+    log_entry.to_csv(log_path, mode='a', header=file_is_new, index=False)
 
 def main():
 
@@ -588,7 +612,7 @@ def main():
     basket_rules = run_basket_analysis(raw_sales)
 
     print("Generating demand forecast...")
-    forecast = run_demand_forecasting(enriched_data)
+    forecast, forecast_metrics= run_demand_forecasting(enriched_data)
 
     print("Formatting insights for Flutter app...")
     
@@ -623,10 +647,40 @@ def main():
             print(f"   Festival alert: {festival_advice['title']}")
         print(f"   Bundles: {len(suggested_bundles)} recommendations")
         print(f"   Stock advice: {len(stock_advice)} days forecasted")
+
+        
+        metrics = {
+            "status": "success",
+            "bundles_generated": len(suggested_bundles),
+            "forecast_days": len(stock_advice),
+            "festival_active": bool(festival_advice),
+            "total_records_fetched": len(raw_sales),
+            "weekly_revenue_estimate": sum(
+                day.get("expected_revenue", 0) for day in stock_advice
+            ),
+            # ✅ Spread forecast metrics in — handles the "not enough data" string gracefully
+            **(forecast_metrics if isinstance(forecast_metrics, dict) else {
+                "mae": None,
+                "accuracy_score": None,
+                "sample_size": 0,
+            }),
+        }
+        log_performance(metrics)
+        print("Performance log updated.")
+
     except Exception as e:
         print(f"Failed to insert insights: {e}")
-        print("   Make sure the 'daily_insights' table exists in Supabase")
-        print("   Check RLS policies - anon key needs INSERT access")
+        
+        #log failures so we can track them
+        log_performance({
+            "status": "failed",
+            "error": str(e),
+            "bundles_generated": 0,
+            "forecast_days": 0,
+            "festival_active": False,
+            "total_records_fetched": len(raw_sales) if 'raw_sales' in locals() else 0,
+            "weekly_revenue_estimate": 0,
+        })
         raise
     print("Pipeline Complete. Insights are ready!!")
 

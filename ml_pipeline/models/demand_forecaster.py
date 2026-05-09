@@ -60,7 +60,7 @@ def _small_data_forecast(daily):
 def run_demand_forecasting(df):
     daily = _daily_demand_frame(df)
     if len(daily) < MIN_PROPHET_DAYS:
-        return _small_data_forecast(daily)
+        return _small_data_forecast(daily), {}   # ← unpack-safe empty metrics
 
     prophet_df = daily.copy()
     prophet_df['floor'] = 0
@@ -75,16 +75,23 @@ def run_demand_forecasting(df):
 
     future = model.make_future_dataframe(periods=7)
     future['floor'] = 0
-    forecast = model.predict(future).tail(7)
+    full_forecast = model.predict(future)   # ← keep full forecast (historical + future)
 
-    forecast[['yhat', 'yhat_upper', 'yhat_lower']] = (
-        forecast[['yhat', 'yhat_upper', 'yhat_lower']]
+    full_forecast[['yhat', 'yhat_upper', 'yhat_lower']] = (
+        full_forecast[['yhat', 'yhat_upper', 'yhat_lower']]
         .clip(lower=0)
         .round(2)
     )
+
+    # ✅ Metrics use historical overlap (actuals vs in-sample predictions)
+    daily_df = prophet_df.rename(columns={'y': 'y'})[['ds', 'y']]
+    performance = calculate_performance_metrics(daily_df, full_forecast)
+
+    # Slice to future 7 days only for the app
+    forecast = full_forecast.tail(7).copy()
     forecast['model_basis'] = 'sales trend model'
 
-    return forecast[['ds', 'yhat', 'yhat_upper', 'yhat_lower', 'model_basis']]
+    return forecast[['ds', 'yhat', 'yhat_upper', 'yhat_lower', 'model_basis']], performance
 
 def calculate_performance_metrics(daily_df, forecast_df):
     """Compare recent actual sales to previous predictions."""

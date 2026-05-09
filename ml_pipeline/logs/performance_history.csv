@@ -1,0 +1,3 @@
+timestamp,status,bundles_generated,forecast_days,festival_active,total_records_fetched,weekly_revenue_estimate
+2026-05-09T12:58:14.240070,success,3,7,False,109,10745
+2026-05-09T13:11:34.276371,success,3,7,False,109,10745
