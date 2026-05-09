@@ -45,10 +45,11 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          
-          # Force add both the data and the performance logs
-          git add -f ml_pipeline/data/processed/master_training_data.csv
-          git add -f ml_pipeline/logs/performance_history.csv
-          
-          git commit -m "Automated Sync & Performance Log: $(date +'%Y-%m-%d')" || echo "No changes"
+      
+          # Only add if file actually exists
+          [ -f ml_pipeline/data/processed/master_training_data.csv ] && git add -f ml_pipeline/data/processed/master_training_data.csv
+          [ -f ml_pipeline/logs/performance_history.csv ] && git add -f ml_pipeline/logs/performance_history.csv
+      
+          git diff --staged --quiet && echo "No changes to commit" || \
+            git commit -m "Automated Sync & Performance Log: $(date +'%Y-%m-%d')"
           git push
