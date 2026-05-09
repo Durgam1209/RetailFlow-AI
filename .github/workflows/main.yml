@@ -38,17 +38,18 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python ml_pipeline/main.py # Generates forecast and bundles
 
-      - name: Commit Updated Training Data
+      - name: Commit Updated Data and Logs
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          
-          # Use the -f (force) flag to bypass .gitignore for this specific file
-          git add -f ml_pipeline/data/processed/master_training_data.csv
-          
-          # Commit only if there are actual data changes to avoid empty commit errors
-          git commit -m "Automated Data Sync: $(date +'%Y-%m-%d')" || echo "No data changes to commit"
-          
+      
+          # Only add if file actually exists
+          [ -f ml_pipeline/data/processed/master_training_data.csv ] && git add -f ml_pipeline/data/processed/master_training_data.csv
+          [ -f ml_pipeline/logs/performance_history.csv ] && git add -f ml_pipeline/logs/performance_history.csv
+      
+          git diff --staged --quiet && echo "No changes to commit" || \
+            git commit -m "Automated Sync & Performance Log: $(date +'%Y-%m-%d')"
           git push
