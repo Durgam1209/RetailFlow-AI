@@ -2,7 +2,7 @@ name: RetailFlow AI
 
 on:
   schedule:
-    - cron: '0 18 * * *' # Runs daily at 11:30 PM IST (6 PM UTC)
+    - cron: '0 6,12,17,18 * * *' # Runs daily at 11:30 PM IST (6 PM UTC)
   push:
     branches: [ main ] # Runs every time you push code
   workflow_dispatch: # Allows you to trigger it manually
