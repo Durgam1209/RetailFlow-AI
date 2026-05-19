@@ -25,7 +25,18 @@ class HiveSalesHelper {
   }
 
   Future<void> ensureCatalogSeeded(List<FruitItem> defaultCatalog) async {
-    if (_catalogBox.isEmpty) {
+    // Always reseed the catalog to ensure all fruits are present
+    // This fixes issues where Hive may not persist all items correctly
+    final existing = _catalogBox.length;
+    
+    if (existing != defaultCatalog.length) {
+      // Clear and reseed if counts don't match
+      await _catalogBox.clear();
+      for (final fruit in defaultCatalog) {
+        await _catalogBox.put(fruit.id, fruit.toMap());
+      }
+    } else if (existing == 0) {
+      // Initial seed
       for (final fruit in defaultCatalog) {
         await _catalogBox.put(fruit.id, fruit.toMap());
       }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "591673220052",
+    "project_id": "retailflow-ai-fb-hosting66",
+    "storage_bucket": "retailflow-ai-fb-hosting66.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:591673220052:android:cd06cda2aea5af05f9d441",
+        "android_client_info": {
+          "package_name": "com.example.murali_fruits_ml"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBtJDQ5ROTd44sEQHtVBvt48mFrqzNeWqQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

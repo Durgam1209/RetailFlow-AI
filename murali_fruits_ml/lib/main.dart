@@ -10,6 +10,8 @@ import 'data/supabase_sync_service.dart';
 import 'models/fruit_item.dart';
 import 'widgets/fruit_tile.dart';
 import 'widgets/insights_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +22,9 @@ Future<void> main() async {
   }
   final salesHelper = HiveSalesHelper();
   await salesHelper.init();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(
     MuraliFruitsApp(
       salesHelper: salesHelper,
