@@ -19,9 +19,15 @@ RetailFlow AI transforms manual storefront operations into a data-driven ecosyst
 ### 1. Storefront Point-of-Sale (POS) Engine
 The frontend client architecture enforces a strict **Offline-First transactional queue pattern**. POS tasks capture weight adjustments dynamically, caching data inside local NoSQL structures to protect system availability against unstable network conditions on the shop floor.
 
+<<<<<<< HEAD
 | POS Product Catalog Matrix | Micro-Reactive Billing | Dynamic Checkout Verification |
 | :---: | :---: | :---: |
 | <img src="murali_fruits_ml/assets/images/pos_catalog.png" width="230" alt="POS Catalog Grid"/> | <img src="murali_fruits_ml/assets/images/pos_billing.png" width="230" alt="POS Realtime Billing"/> | <img src="murali_fruits_ml/assets/images/pos_checkout.png" width="230" alt="POS Checkout Safe Panel"/> |
+=======
+| POS Inventory Grid Selection | Micro-Reactive Checkout Calculation | Dynamic Weight Scale Mapping |
+| :---: | :---: | :---: |
+| <img src="https://github.com/user-attachments/assets/5d1b13bb-c7a3-4a55-baa1-65d38a85373a" width="230"/> | <img src="https://github.com/user-attachments/assets/2d5af768-3ff5-48ee-aafb-51bdc33f373a" width="230"/> | <img src="https://github.com/user-attachments/assets/c2a60063-5bde-4972-bf42-e899818f5a5c" width="230"/> |
+>>>>>>> d4660d4baa23151cbba77eafd05d1483f8b16b4d
 | *NoSQL-backed local cache rendering real-time stock matrix grids.* | *Safer transactional confirmation layout preventing rounding errors.* | *Incremental precision scaling matching standard micro-retail increments.* |
 
 ---
@@ -31,7 +37,11 @@ To optimize system execution speeds, the client layer bypasses heavy client-side
 
 | Financial Revenue Vectors | Running Daily Checkout Volume | Historical Log Ingestions |
 | :---: | :---: | :---: |
+<<<<<<< HEAD
 | <img src="murali_fruits_ml/assets/images/analytics_revenue.png" width="230" alt="Weekly Revenue Dashboard"/> | <img src="murali_fruits_ml/assets/images/analytics_volume.png" width="230" alt="Transaction Traffic Volume"/> | <img src="murali_fruits_ml/assets/images/analytics_history.png" width="230" alt="Historical Ledger Auditing"/> |
+=======
+| <img src="https://github.com/user-attachments/assets/c30923c7-eb5d-4872-961d-aa03ca1967a5" width="230"/> | <img src="https://github.com/user-attachments/assets/92bc1544-3f76-4561-88b6-d80342a7857d" width="230"/> | <img src="https://github.com/user-attachments/assets/30940e76-9b39-4dd2-9cd1-201d86d8d4fe" width="230"/> |
+>>>>>>> d4660d4baa23151cbba77eafd05d1483f8b16b4d
 | *Weekly income trends highlighting peak revenue days via green thresholds.* | *Granular transactional volume tracking detailing traffic rhythms.* | *Comprehensive historical audits pulled directly from local storage collections.* |
 
 ---
@@ -41,7 +51,11 @@ Complex mathematical data structures from the MLOps pipeline are simplified into
 
 | Pipeline Predictions Dashboard | Spatial Merchandising Map | Affinity Basket Recommendations |
 | :---: | :---: | :---: |
+<<<<<<< HEAD
 | <img src="murali_fruits_ml/assets/images/ai_predictions.png" width="230" alt="Predictive Analytics Feed"/> | <img src="murali_fruits_ml/assets/images/shop_layout.png" width="230" alt="AI Shop Layout Overlay"/> | <img src="murali_fruits_ml/assets/images/ai_bundles.png" width="230" alt="Market Basket Affinities"/> |
+=======
+| <img src="https://github.com/user-attachments/assets/57d39942-0287-4f16-912b-5c9244fa0603" width="230"/> | <img src="https://github.com/user-attachments/assets/3891747b-2ba4-44e3-916e-91d7617799d0" width="230"/> | <img src="https://github.com/user-attachments/assets/1ea1d936-e0ae-4382-a7e3-6ceb11f68cef" width="230"/> |
+>>>>>>> d4660d4baa23151cbba77eafd05d1483f8b16b4d
 | *7-day advanced stock plans generated via Prophet time-series data calculations.* | *Zone-based layout engine overlaying placement cues on store floorplans.* | *Item bundling pairings derived dynamically from Apriori rules mining.* |
 
 ---
@@ -50,11 +64,19 @@ Complex mathematical data structures from the MLOps pipeline are simplified into
 The end-to-end telemetry system is orchestrated entirely in the cloud. Scheduled GitHub Actions workflows track model drift by writing performance evaluations directly back to Supabase PostgreSQL, ensuring the system requires zero developer maintenance.
 
 #### Nightly Automation Workflow Performance Tracking (GitHub Actions Console)
+<<<<<<< HEAD
 ![GitHub Actions Workflow Run](murali_fruits_ml/assets/images/mlops_pipeline_log.png)
 *Automated background runner script provisioning isolated runtime layers, executing Python feature engineering tasks, and checking for data drift.*
 
 #### Core Database Schema Analytics & Relational Collections View (Supabase Management Layer)
 ![Supabase Database Tables Dashboard](murali_fruits_ml/assets/images/supabase_dashboard.png)
+=======
+![GitHub Actions Workflow Run](https://github.com/user-attachments/assets/806267be-bdc9-4fe2-9aff-350773ab5912)
+*Automated background runner script provisioning isolated runtime layers, executing Python feature engineering tasks, and checking for data drift.*
+
+#### Core Database Schema Analytics & Relational Collections View (Supabase Management Layer)
+![Supabase Database Tables Dashboard](https://github.com/user-attachments/assets/7d3dfaa6-00d6-4c9d-8420-cce65f5580ca)
+>>>>>>> d4660d4baa23151cbba77eafd05d1483f8b16b4d
 *Serverless storage configuration mapping secure row-level security parameters, database index clusters, and highly performant analytical compute scripts.*
 
 ---
@@ -187,6 +209,7 @@ firebase deploy --only hosting
 ```
 
 ---
+<<<<<<< HEAD
 
 ## 📊 Real-World Production Optimizations Enforced
 
@@ -194,3 +217,14 @@ firebase deploy --only hosting
 * **Drift-Aware Monitoring:** Automatically prints and logs performance validation history logs (`performance_history.csv`) during every retraining cycle to prevent time-series forecast drift on noisy real-world data arrays.
 * **Resilient Data Sanitation Fallbacks:** Outfitted with robust fallback model syntax parsing rules (`??` operator filters) inside your Dart serializers (`fruit_item.dart` / `transaction_item.dart`), seamlessly protecting your application from schema evolution crashes when reading historical data records.
 * **Enterprise-Grade Client Persistence:** Built on an offline-first architecture utilizing strict transactional queues, providing business continuity under unstable connectivity conditions on the shop floor.
+=======
+
+## 📊 Real-World Production Optimizations Enforced
+
+* **Database-Side Compute Aggregations:** Leverages custom PostgreSQL aggregation views to process running transactional totals on the cloud, reducing mobile client memory footprints and maximizing network load efficiency.
+* **Drift-Aware Monitoring:** Automatically prints and logs performance validation history logs (`performance_history.csv`) during every retraining cycle to prevent time-series forecast drift on noisy real-world data arrays.
+* **Resilient Data Sanitation Fallbacks:** Outfitted with robust fallback model syntax parsing rules (`??` operator filters) inside your Dart serializers (`fruit_item.dart` / `transaction_item.dart`), seamlessly protecting your application from schema evolution crashes when reading historical data records.
+* **Enterprise-Grade Client Persistence:** Built on an offline-first architecture utilizing strict transactional queues, providing business continuity under unstable connectivity conditions on the shop floor.
+
+```
+>>>>>>> d4660d4baa23151cbba77eafd05d1483f8b16b4d
