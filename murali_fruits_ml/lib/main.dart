@@ -7,30 +7,64 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'data/hive_sales_helper.dart';
 import 'data/supabase_sync_service.dart';
+import 'data/weather_service.dart';
 import 'models/fruit_item.dart';
 import 'widgets/fruit_tile.dart';
 import 'widgets/insights_screen.dart';
+import 'widgets/weather_panel.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-  const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
-  if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
-    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+  
+  try {
+    const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+    const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+    if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+      await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+    }
+  } catch (e) {
+    debugPrint('Supabase init error: $e');
   }
-  final salesHelper = HiveSalesHelper();
-  await salesHelper.init();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  runApp(
-    MuraliFruitsApp(
-      salesHelper: salesHelper,
-      syncService: SupabaseSyncService(),
-    ),
-  );
+  
+  try {
+    final salesHelper = HiveSalesHelper();
+    await salesHelper.init();
+    
+    // Initialize weather service with OpenWeather API key
+    const weatherKey = String.fromEnvironment('WEATHER_KEY', defaultValue: '');
+    final weatherService = weatherKey.isNotEmpty
+        ? WeatherService(apiKey: weatherKey, cityName: 'Bangalore')
+        : null;
+    
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } catch (e) {
+      debugPrint('Firebase init error: $e');
+    }
+    
+    runApp(
+      MuraliFruitsApp(
+        salesHelper: salesHelper,
+        syncService: SupabaseSyncService(),
+        weatherService: weatherService,
+      ),
+    );
+  } catch (e) {
+    debugPrint('App initialization error: $e');
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Text('Error: $e'),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class MuraliFruitsApp extends StatelessWidget {
@@ -38,10 +72,12 @@ class MuraliFruitsApp extends StatelessWidget {
     super.key,
     required this.salesHelper,
     required this.syncService,
+    this.weatherService,
   });
 
   final HiveSalesHelper salesHelper;
   final SupabaseSyncService syncService;
+  final WeatherService? weatherService;
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +115,11 @@ class MuraliFruitsApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
-      home: SalesHomePage(salesHelper: salesHelper, syncService: syncService),
+      home: SalesHomePage(
+        salesHelper: salesHelper,
+        syncService: syncService,
+        weatherService: weatherService,
+      ),
     );
   }
 }
@@ -89,10 +129,12 @@ class SalesHomePage extends StatefulWidget {
     super.key,
     required this.salesHelper,
     required this.syncService,
+    this.weatherService,
   });
 
   final HiveSalesHelper salesHelper;
   final SupabaseSyncService syncService;
+  final WeatherService? weatherService;
 
   @override
   State<SalesHomePage> createState() => _SalesHomePageState();
@@ -223,6 +265,8 @@ class _SalesHomePageState extends State<SalesHomePage> {
   String? _syncMessage;
   int _pendingSyncCount = 0;
   String _searchQuery = '';
+  WeatherData? _todayWeather;
+  WeatherData? _tomorrowWeather;
 
   @override
   void initState() {
@@ -232,6 +276,25 @@ class _SalesHomePageState extends State<SalesHomePage> {
     _draftItems = widget.salesHelper.loadDraftSession(_catalog);
     _pendingSyncCount = widget.salesHelper.getPendingTransactionCount();
     _listenToConnectivity();
+    _loadWeather();
+  }
+
+  Future<void> _loadWeather() async {
+    if (widget.weatherService == null) return;
+    
+    try {
+      final today = await widget.weatherService!.getTodayWeather();
+      final tomorrow = await widget.weatherService!.getTomorrowWeather();
+      
+      if (mounted) {
+        setState(() {
+          _todayWeather = today;
+          _tomorrowWeather = tomorrow;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading weather: $e');
+    }
   }
 
   Future<void> _listenToConnectivity() async {
@@ -503,8 +566,22 @@ class _SalesHomePageState extends State<SalesHomePage> {
       return;
     }
 
+    // Prepare weather data to include in transaction
+    Map<String, dynamic>? weatherData;
+    if (_todayWeather != null) {
+      weatherData = {
+        'temperature': _todayWeather!.temperature,
+        'feelsLike': _todayWeather!.feelsLike,
+        'humidity': _todayWeather!.humidity,
+        'windSpeed': _todayWeather!.windSpeed,
+        'condition': _todayWeather!.condition,
+        'icon': _todayWeather!.icon,
+      };
+    }
+
     final transactionId = await widget.salesHelper.finishTransaction(
       _draftItems,
+      weatherData: weatherData,
     );
     if (!mounted) {
       return;
@@ -676,6 +753,12 @@ Widget _buildSalesTab() {
                                             !_isSyncing
                                         ? _syncPendingSales
                                         : null,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  WeatherDisplayPanel(
+                                    todayWeather: _todayWeather,
+                                    tomorrowWeather: _tomorrowWeather,
+                                    weatherService: widget.weatherService,
                                   ),
                                   const SizedBox(height: 14),
                                   Row(

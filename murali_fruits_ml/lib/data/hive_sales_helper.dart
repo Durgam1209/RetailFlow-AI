@@ -217,8 +217,9 @@ class HiveSalesHelper {
   }
 
   Future<String> finishTransaction(
-    Map<String, Map<String, dynamic>> items,
-  ) async {
+    Map<String, Map<String, dynamic>> items, {
+    Map<String, dynamic>? weatherData,
+  }) async {
     final transactionId = _generateTransactionId();
     final timestamp = DateTime.now();
     final filteredItems = items.values
@@ -242,14 +243,21 @@ class HiveSalesHelper {
     );
     final itemCount = filteredItems.length;
 
-    await _salesBox.put(transactionId, <String, dynamic>{
+    final transactionData = <String, dynamic>{
       'transactionId': transactionId,
       ..._timestampFields('created', timestamp),
       'items': filteredItems,
       'itemCount': itemCount,
       'totalAmount': _roundCurrency(totalAmount),
       'syncStatus': 'pending',
-    });
+    };
+
+    // Add weather data if provided
+    if (weatherData != null) {
+      transactionData['weather'] = weatherData;
+    }
+
+    await _salesBox.put(transactionId, transactionData);
 
     for (final item in filteredItems) {
       final fruitId = item['fruitId'] as String?;

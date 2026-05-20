@@ -54,17 +54,28 @@ class SupabaseSyncService {
       }
 
       try {
+        final payload = <String, dynamic>{
+          'transaction_id': transactionId,
+          'created_at': transaction['createdAt'],
+          'created_date': transaction['createdDate'],
+          'created_time': transaction['createdTime'],
+          'total_amount': transaction['totalAmount'],
+          'item_count': transaction['itemCount'] ?? 0,
+          'items': transaction['items'],
+          'is_synced': false,
+        };
+
+        // Include weather data if available
+        if (transaction['weather'] != null) {
+          final weather = transaction['weather'] as Map<String, dynamic>;
+          payload['weather_temperature'] = weather['temperature'];
+          payload['weather_condition'] = weather['condition'];
+          payload['weather_humidity'] = weather['humidity'];
+          payload['weather_wind_speed'] = weather['windSpeed'];
+        }
+
         await client.from('sales_log').upsert(
-          <String, dynamic>{
-            'transaction_id': transactionId,
-            'created_at': transaction['createdAt'],
-            'created_date': transaction['createdDate'],
-            'created_time': transaction['createdTime'],
-            'total_amount': transaction['totalAmount'],
-            'item_count': transaction['itemCount'] ?? 0,
-            'items': transaction['items'],
-            'is_synced': false,
-          },
+          payload,
           onConflict: 'transaction_id',
         );
 
