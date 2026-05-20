@@ -3,14 +3,17 @@ import '../data/weather_service.dart';
 
 class WeatherDisplayPanel extends StatelessWidget {
   const WeatherDisplayPanel({
+    super.key,
     required this.todayWeather,
     required this.tomorrowWeather,
     this.weatherService,
+    this.showTomorrow = false,
   });
 
   final WeatherData? todayWeather;
   final WeatherData? tomorrowWeather;
   final WeatherService? weatherService;
+  final bool showTomorrow;
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +44,7 @@ class WeatherDisplayPanel extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    weatherService?.getWeatherEmoji(todayWeather!) ?? '🌤️',
+                    weatherService?.getWeatherEmoji(todayWeather!) ?? '\u26C5',
                     style: const TextStyle(fontSize: 16),
                   ),
                 ],
@@ -49,7 +52,7 @@ class WeatherDisplayPanel extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    '${todayWeather!.temperature.toStringAsFixed(1)}°C',
+                    '${todayWeather!.temperature.toStringAsFixed(1)} C',
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
@@ -57,20 +60,40 @@ class WeatherDisplayPanel extends StatelessWidget {
                   ),
                   const SizedBox(width: 16),
                   Text(
-                    '💧 ${todayWeather!.humidity}%',
+                    'Humidity ${todayWeather!.humidity}%',
                     style: const TextStyle(fontSize: 13),
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    '💨 ${todayWeather!.windSpeed.toStringAsFixed(1)} m/s',
+                    'Wind ${todayWeather!.windSpeed.toStringAsFixed(1)} m/s',
                     style: const TextStyle(fontSize: 13),
                   ),
                 ],
               ),
             ],
-            if (todayWeather != null && tomorrowWeather != null)
+            if (todayWeather == null && tomorrowWeather != null) ...[
+              const SizedBox(height: 2),
+              Row(
+                children: const [
+                  Text(
+                    'Today: unavailable',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF6A5F57),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    '\u26C5',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ],
+              ),
+            ],
+            if (showTomorrow && todayWeather != null && tomorrowWeather != null)
               const SizedBox(height: 12),
-            if (tomorrowWeather != null) ...[
+            if (showTomorrow && tomorrowWeather != null) ...[
               Row(
                 children: [
                   Text(
@@ -83,13 +106,14 @@ class WeatherDisplayPanel extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    weatherService?.getWeatherEmoji(tomorrowWeather!) ?? '🌤️',
+                    weatherService?.getWeatherEmoji(tomorrowWeather!) ??
+                        '\u26C5',
                     style: const TextStyle(fontSize: 16),
                   ),
                 ],
               ),
               Text(
-                '${tomorrowWeather!.temperature.toStringAsFixed(1)}°C',
+                '${tomorrowWeather!.temperature.toStringAsFixed(1)} C',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,

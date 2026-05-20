@@ -6,6 +6,11 @@ create table if not exists public.sales_log (
   total_amount numeric(10, 2) not null,
   item_count integer not null default 0,
   items jsonb not null,
+  weather jsonb not null default '{}'::jsonb,
+  weather_temperature numeric(5, 2),
+  weather_condition text,
+  weather_humidity integer,
+  weather_wind_speed numeric(6, 2),
   is_synced boolean not null default false
 );
 
@@ -27,6 +32,13 @@ alter table public.sales_log
 
 alter table public.sales_log
   add column if not exists items jsonb not null default '[]'::jsonb;
+
+alter table public.sales_log
+  add column if not exists weather jsonb not null default '{}'::jsonb,
+  add column if not exists weather_temperature numeric(5, 2),
+  add column if not exists weather_condition text,
+  add column if not exists weather_humidity integer,
+  add column if not exists weather_wind_speed numeric(6, 2);
 
 alter table public.sales_log
   enable row level security;
@@ -52,3 +64,16 @@ on public.sales_log
 for select
 to anon, authenticated
 using (true);
+
+create or replace view public.daily_sales_summary as
+select
+  created_date,
+  to_char(created_date, 'Dy') as day_of_week,
+  sum(total_amount::numeric) as total_revenue,
+  count(transaction_id) as total_transactions
+from public.sales_log
+group by created_date
+order by created_date desc;
+
+grant select on public.daily_sales_summary to anon;
+grant select on public.daily_sales_summary to authenticated;

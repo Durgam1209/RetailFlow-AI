@@ -11,6 +11,8 @@ import time
 import httpx
 from models.basket_analyzer import run_basket_analysis
 from models.demand_forecaster import run_demand_forecasting
+from validators import validate_and_standardize_payload
+
 
 # Load environment variables from .env
 dotenv.load_dotenv()
@@ -293,6 +295,160 @@ def get_festival_advice(df, today=None):
         "basis": "Historical festival sales" if historical_fruits else "Festival rule mapping",
     }
 
+
+def fetch_tomorrow_weather(
+    city_name="Mahadevapura, Bengaluru",
+    latitude=12.9916,
+    longitude=77.6926,
+):
+    if not os.getenv("WEATHER_KEY"):
+        return {}
+
+    tomorrow = date.today() + timedelta(days=1)
+    try:
+        response = httpx.get(
+            "https://api.openweathermap.org/data/2.5/forecast",
+            params={
+                "lat": latitude,
+                "lon": longitude,
+                "units": "metric",
+                "appid": os.getenv("WEATHER_KEY"),
+            },
+            timeout=20.0,
+        )
+        response.raise_for_status()
+        forecasts = response.json().get("list", [])
+    except Exception as error:
+        print(f"Weather forecast fetch failed: {error}")
+        return {}
+
+    tomorrow_rows = []
+    for item in forecasts:
+        forecast_time = datetime.fromtimestamp(item.get("dt", 0))
+        if forecast_time.date() == tomorrow:
+            tomorrow_rows.append(item)
+
+    if not tomorrow_rows:
+        return {}
+
+    selected = min(
+        tomorrow_rows,
+        key=lambda item: abs(datetime.fromtimestamp(item.get("dt", 0)).hour - 12),
+    )
+    main = selected.get("main", {})
+    weather = (selected.get("weather") or [{}])[0]
+    wind = selected.get("wind", {})
+    tomorrow_temps = [
+        _safe_float(item.get("main", {}).get("temp"))
+        for item in tomorrow_rows
+        if item.get("main", {}).get("temp") is not None
+    ]
+    tomorrow_min = min(tomorrow_temps) if tomorrow_temps else _safe_float(main.get("temp"))
+    tomorrow_max = max(tomorrow_temps) if tomorrow_temps else _safe_float(main.get("temp"))
+
+    return {
+        "date": tomorrow.isoformat(),
+        "city": city_name,
+        "condition": weather.get("main", "Unknown"),
+        "temperature": round(_safe_float(main.get("temp")), 1),
+        "min_temperature": round(tomorrow_min, 1),
+        "max_temperature": round(tomorrow_max, 1),
+        "feels_like": round(_safe_float(main.get("feels_like")), 1),
+        "humidity": int(_safe_float(main.get("humidity"))),
+        "wind_speed": round(_safe_float(wind.get("speed")), 1),
+        "rain_probability": round(_safe_float(selected.get("pop")), 2),
+    }
+
+
+def _weather_fruit_names(weather):
+    if not weather:
+        return []
+
+    condition = str(weather.get("condition", "")).lower()
+    temperature = _safe_float(weather.get("temperature"))
+    humidity = _safe_float(weather.get("humidity"))
+    rain_probability = _safe_float(weather.get("rain_probability"))
+    fruits = []
+
+    if temperature >= 30:
+        fruits.extend(["Watermelon", "Watermelon Kiran", "Orange Citrus", "Musambi", "Papaya"])
+    if temperature <= 18:
+        fruits.extend(["Banana", "Apple Washington", "Apple Poland", "Pomegranate"])
+    if "rain" in condition or rain_probability >= 0.5:
+        fruits.extend(["Banana", "Pomegranate", "Apple Washington", "Green Grapes"])
+    if humidity >= 70:
+        fruits.extend(["Orange Citrus", "Musambi", "Papaya"])
+
+    return list(dict.fromkeys(fruits))
+
+
+def _apply_weather_adjustment(stock_advice, weather):
+    recommended = _weather_fruit_names(weather)
+    if not stock_advice or not recommended:
+        return stock_advice, {
+            **weather,
+            "recommended_fruits": recommended,
+            "action": "No weather stock adjustment needed.",
+        } if weather else {}
+
+    tomorrow_date = weather.get("date")
+    has_exact_tomorrow_row = any(day.get("date") == tomorrow_date for day in stock_advice)
+    updated_advice = []
+    for index, day in enumerate(stock_advice):
+        updated_day = {**day}
+        if day.get("date") == tomorrow_date or (index == 0 and not has_exact_tomorrow_row):
+            top_fruits = list(day.get("top_fruits") or [])
+            known = {item.get("fruit_name") for item in top_fruits if isinstance(item, dict)}
+            for fruit_name in recommended:
+                if fruit_name in known:
+                    continue
+                unit_price = DEFAULT_FRUIT_PRICES.get(fruit_name, 100)
+                quantity_kg = 2.0
+                top_fruits.append(
+                    {
+                        "fruit_name": fruit_name,
+                        "suggested_kg": quantity_kg,
+                        "expected_revenue": round(quantity_kg * unit_price),
+                        "is_weather_pick": True,
+                        "stock_label": f"{_format_kg(quantity_kg)} {fruit_name}",
+                        "revenue_label": _format_rupees(quantity_kg * unit_price),
+                    }
+                )
+
+            top_fruits = sorted(
+                top_fruits,
+                key=lambda item: (item.get("is_weather_pick") is True, item.get("expected_revenue", 0)),
+                reverse=True,
+            )[:5]
+            total_revenue = sum(item.get("expected_revenue", 0) for item in top_fruits)
+            total_kg = sum(item.get("suggested_kg", 0) for item in top_fruits)
+            updated_day["top_fruits"] = top_fruits
+            updated_day["expected_revenue"] = round(total_revenue)
+            updated_day["revenue_label"] = f"Expected revenue: {_format_rupees(total_revenue)}"
+            updated_day["stock_label"] = f"Top stock target: {_format_kg(total_kg)} across {len(top_fruits)} fruits"
+            updated_day["weather_condition"] = weather.get("condition")
+            updated_day["weather_min_temperature"] = weather.get("min_temperature")
+            updated_day["weather_max_temperature"] = weather.get("max_temperature")
+            updated_day["weather_recommended_fruits"] = recommended
+            updated_day["weather_adjustment"] = (
+                f"Tomorrow weather: {weather.get('condition')} "
+                f"{weather.get('min_temperature')} - {weather.get('max_temperature')} C. Boost "
+                + ", ".join(recommended[:3])
+                + "."
+            )
+        updated_advice.append(updated_day)
+
+    return updated_advice, {
+        **weather,
+        "recommended_fruits": recommended,
+        "action": (
+            f"Tomorrow range: {weather.get('min_temperature')} - "
+            f"{weather.get('max_temperature')} C. Boost "
+            + ", ".join(recommended[:3])
+            + "."
+        ),
+    }
+
 def fetch_and_prepare_data():
     """Fetch sales data from Supabase with retry logic"""
     
@@ -573,20 +729,25 @@ def insert_daily_insight(insight_data):
         return supabase.table("daily_insights").insert(insight_data).execute()
     except Exception as e:
         message = str(e).lower()
-        is_missing_festival_column = (
-            "festival_advice" in message
-            or ("could not find" in message and "column" in message and "festival" in message)
+        optional_json_columns = ("festival_advice", "weather_advice")
+        missing_optional_column = (
+            any(column in message for column in optional_json_columns)
+            or (
+                "could not find" in message
+                and "column" in message
+                and any(column.replace("_advice", "") in message for column in optional_json_columns)
+            )
         )
-        if not is_missing_festival_column:
+        if not missing_optional_column:
             raise
 
         fallback_data = {
             key: value
             for key, value in insight_data.items()
-            if key != "festival_advice"
+            if key not in optional_json_columns
         }
-        print("festival_advice column not found; retrying without event banner data.")
-        print("Run sql/setup_daily_insights_table.sql to enable festival banners.")
+        print("Optional insight columns not found; retrying without event/weather data.")
+        print("Run sql/setup_daily_insights_table.sql to enable all insight cards.")
         return supabase.table("daily_insights").insert(fallback_data).execute()
 
 def log_performance(metrics):
@@ -625,6 +786,11 @@ def main():
         enriched_data,
         festival_advice,
     )
+    tomorrow_weather = fetch_tomorrow_weather()
+    stock_advice, weather_advice = _apply_weather_adjustment(
+        stock_advice,
+        tomorrow_weather,
+    )
     
     # Generate summary
     forecast_summary = build_forecast_summary(stock_advice)
@@ -636,8 +802,17 @@ def main():
         "suggested_bundles": suggested_bundles,
         "stock_advice": stock_advice,
         "festival_advice": festival_advice,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "weather_advice": weather_advice,
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
+
+    # Validate & standardize payload so Flutter decoding never breaks on schema drift.
+    insight_data, validation_errors = validate_and_standardize_payload(insight_data)
+    if validation_errors:
+        print("Payload validation warnings:")
+        for err in validation_errors:
+            print(f" - {err}")
+
 
     try:
         result = insert_daily_insight(insight_data)
@@ -645,6 +820,8 @@ def main():
         print(f"   Forecast: {forecast_summary}")
         if festival_advice:
             print(f"   Festival alert: {festival_advice['title']}")
+        if weather_advice:
+            print(f"   Weather alert: {weather_advice.get('action')}")
         print(f"   Bundles: {len(suggested_bundles)} recommendations")
         print(f"   Stock advice: {len(stock_advice)} days forecasted")
 
@@ -687,4 +864,3 @@ def main():
 if __name__ == "__main__":
     main()
     
-

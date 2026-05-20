@@ -11,13 +11,14 @@ import 'data/weather_service.dart';
 import 'models/fruit_item.dart';
 import 'widgets/fruit_tile.dart';
 import 'widgets/insights_screen.dart';
+import 'widgets/sales_analytics_screen.dart';
 import 'widgets/weather_panel.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   try {
     const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
     const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
@@ -27,17 +28,22 @@ Future<void> main() async {
   } catch (e) {
     debugPrint('Supabase init error: $e');
   }
-  
+
   try {
     final salesHelper = HiveSalesHelper();
     await salesHelper.init();
-    
+
     // Initialize weather service with OpenWeather API key
     const weatherKey = String.fromEnvironment('WEATHER_KEY', defaultValue: '');
     final weatherService = weatherKey.isNotEmpty
-        ? WeatherService(apiKey: weatherKey, cityName: 'Bangalore')
+        ? WeatherService(
+            apiKey: weatherKey,
+            cityName: 'Mahadevapura, Bengaluru',
+            latitude: 12.9916,
+            longitude: 77.6926,
+          )
         : null;
-    
+
     try {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
@@ -45,7 +51,7 @@ Future<void> main() async {
     } catch (e) {
       debugPrint('Firebase init error: $e');
     }
-    
+
     runApp(
       MuraliFruitsApp(
         salesHelper: salesHelper,
@@ -57,11 +63,7 @@ Future<void> main() async {
     debugPrint('App initialization error: $e');
     runApp(
       MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: Text('Error: $e'),
-          ),
-        ),
+        home: Scaffold(body: Center(child: Text('Error: $e'))),
       ),
     );
   }
@@ -281,11 +283,11 @@ class _SalesHomePageState extends State<SalesHomePage> {
 
   Future<void> _loadWeather() async {
     if (widget.weatherService == null) return;
-    
+
     try {
       final today = await widget.weatherService!.getTodayWeather();
       final tomorrow = await widget.weatherService!.getTomorrowWeather();
-      
+
       if (mounted) {
         setState(() {
           _todayWeather = today;
@@ -566,16 +568,16 @@ class _SalesHomePageState extends State<SalesHomePage> {
       return;
     }
 
-    // Prepare weather data to include in transaction
     Map<String, dynamic>? weatherData;
-    if (_todayWeather != null) {
-      weatherData = {
-        'temperature': _todayWeather!.temperature,
-        'feelsLike': _todayWeather!.feelsLike,
-        'humidity': _todayWeather!.humidity,
-        'windSpeed': _todayWeather!.windSpeed,
-        'condition': _todayWeather!.condition,
-        'icon': _todayWeather!.icon,
+    if (_todayWeather != null || _tomorrowWeather != null) {
+      weatherData = <String, dynamic>{
+        if (_todayWeather != null)
+          'today': _todayWeather!.toMap(label: 'today'),
+        if (_tomorrowWeather != null)
+          'tomorrow': _tomorrowWeather!.toMap(label: 'tomorrow'),
+        if (_tomorrowWeather != null && widget.weatherService != null)
+          'tomorrowRecommendedFruits': widget.weatherService!
+              .getRecommendedFruits(_tomorrowWeather!),
       };
     }
 
@@ -672,25 +674,19 @@ class _SalesHomePageState extends State<SalesHomePage> {
     return '${now.day} ${months[now.month - 1]} ${now.year}';
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: Row(
             children: [
-              Image.asset(
-                'assets/images/logo.png',
-                height: 40,
-              ),
+              Image.asset('assets/images/logo.png', height: 40),
               const SizedBox(width: 12),
               const Text(
                 'RetailFlow AI',
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 20,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
               ),
             ],
           ),
@@ -702,17 +698,22 @@ class _SalesHomePageState extends State<SalesHomePage> {
             tabs: [
               Tab(icon: Icon(Icons.shopping_cart), text: 'Sales'),
               Tab(icon: Icon(Icons.insights), text: 'AI Insights'),
+              Tab(icon: Icon(Icons.analytics_rounded), text: 'Analytics'),
             ],
           ),
         ),
         body: TabBarView(
-          children: [_buildSalesTab(), const InsightsScreen()],
+          children: [
+            _buildSalesTab(),
+            const InsightsScreen(),
+            const SalesAnalyticsScreen(),
+          ],
         ),
       ),
     );
   }
 
-Widget _buildSalesTab() {
+  Widget _buildSalesTab() {
     final statusColor = _statusColor();
     final statusText = _statusText();
 
@@ -736,190 +737,190 @@ Widget _buildSalesTab() {
                     child: CustomScrollView(
                       slivers: <Widget>[
                         SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  _HeroHeader(
-                                    todayLabel: _todayLabel,
-                                    statusColor: statusColor,
-                                    statusText: statusText,
-                                    isOnline: _isOnline,
-                                    syncActionLabel: _syncActionLabel(),
-                                    onSyncTap:
-                                        widget.syncService.isConfigured &&
-                                            _isOnline &&
-                                            !_isSyncing
-                                        ? _syncPendingSales
-                                        : null,
-                                  ),
-                                  const SizedBox(height: 14),
-                                  WeatherDisplayPanel(
-                                    todayWeather: _todayWeather,
-                                    tomorrowWeather: _tomorrowWeather,
-                                    weatherService: widget.weatherService,
-                                  ),
-                                  const SizedBox(height: 14),
-                                  Row(
-                                    children: <Widget>[
-                                      Expanded(
-                                        child: _SummaryCard(
-                                          label: 'Total Weight',
-                                          value:
-                                              '${_totalQuantity.toStringAsFixed(1)} kg',
-                                          icon: Icons.scale_rounded,
-                                          accent: const Color(0xFFFFE1B6),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: _SummaryCard(
-                                          label: 'Total Amount',
-                                          value:
-                                              'Rs ${_totalAmount.toStringAsFixed(0)}',
-                                          icon: Icons.payments_rounded,
-                                          accent: const Color(0xFFFFC6B8),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 18),
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.92),
-                                      borderRadius: BorderRadius.circular(18),
-                                      border: Border.all(
-                                        color: Colors.black,
-                                        width: 1.5,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                _HeroHeader(
+                                  todayLabel: _todayLabel,
+                                  statusColor: statusColor,
+                                  statusText: statusText,
+                                  isOnline: _isOnline,
+                                  syncActionLabel: _syncActionLabel(),
+                                  onSyncTap:
+                                      widget.syncService.isConfigured &&
+                                          _isOnline &&
+                                          !_isSyncing
+                                      ? _syncPendingSales
+                                      : null,
+                                ),
+                                const SizedBox(height: 14),
+                                WeatherDisplayPanel(
+                                  todayWeather: _todayWeather,
+                                  tomorrowWeather: _tomorrowWeather,
+                                  weatherService: widget.weatherService,
+                                ),
+                                const SizedBox(height: 14),
+                                Row(
+                                  children: <Widget>[
+                                    Expanded(
+                                      child: _SummaryCard(
+                                        label: 'Total Weight',
+                                        value:
+                                            '${_totalQuantity.toStringAsFixed(1)} kg',
+                                        icon: Icons.scale_rounded,
+                                        accent: const Color(0xFFFFE1B6),
                                       ),
                                     ),
-                                    child: TextField(
-                                      controller: _searchController,
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _searchQuery = value;
-                                        });
-                                      },
-                                      decoration: const InputDecoration(
-                                        hintText: 'Search produce',
-                                        prefixIcon: Icon(Icons.search_rounded),
-                                        border: InputBorder.none,
-                                        contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 14,
-                                        ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _SummaryCard(
+                                        label: 'Total Amount',
+                                        value:
+                                            'Rs ${_totalAmount.toStringAsFixed(0)}',
+                                        icon: Icons.payments_rounded,
+                                        accent: const Color(0xFFFFC6B8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 18),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.92),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: Colors.black,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: TextField(
+                                    controller: _searchController,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _searchQuery = value;
+                                      });
+                                    },
+                                    decoration: const InputDecoration(
+                                      hintText: 'Search produce',
+                                      prefixIcon: Icon(Icons.search_rounded),
+                                      border: InputBorder.none,
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 14,
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 18),
-                                  Row(
-                                    children: <Widget>[
-                                      const Expanded(
-                                        child: Text(
-                                          'Produce Counter',
-                                          style: TextStyle(
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.w800,
-                                          ),
+                                ),
+                                const SizedBox(height: 18),
+                                Row(
+                                  children: <Widget>[
+                                    const Expanded(
+                                      child: Text(
+                                        'Produce Counter',
+                                        style: TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w800,
                                         ),
                                       ),
-                                      OutlinedButton.icon(
-                                        onPressed: _openManageProducts,
-                                        style: OutlinedButton.styleFrom(
-                                          foregroundColor: Colors.black,
-                                          side: const BorderSide(
-                                            color: Colors.black,
-                                            width: 1.5,
-                                          ),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 12,
-                                          ),
+                                    ),
+                                    OutlinedButton.icon(
+                                      onPressed: _openManageProducts,
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: Colors.black,
+                                        side: const BorderSide(
+                                          color: Colors.black,
+                                          width: 1.5,
                                         ),
-                                        icon: const Icon(
-                                          Icons.tune_rounded,
-                                          size: 18,
-                                        ),
-                                        label: const Text(
-                                          'Manage',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w900,
-                                          ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 12,
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 14),
-                                  _CurrentBillPanel(
-                                    items: _draftCatalogItems,
-                                    totalQuantity: _totalQuantity,
-                                    totalAmount: _totalAmount,
-                                    quantityFor: _quantityFor,
-                                    metricFor: _metricFor,
-                                    lineTotalFor: _lineTotalFor,
-                                    onEditWeight: _editWeight,
-                                    onEditPrice: _editPrice,
-                                    onRemoveLine: _removeDraftLine,
-                                    onClearAll: _draftCatalogItems.isEmpty
-                                        ? null
-                                        : _clearCurrentBill,
-                                  ),
-                                ],
-                              ),
+                                      icon: const Icon(
+                                        Icons.tune_rounded,
+                                        size: 18,
+                                      ),
+                                      label: const Text(
+                                        'Manage',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                _CurrentBillPanel(
+                                  items: _draftCatalogItems,
+                                  totalQuantity: _totalQuantity,
+                                  totalAmount: _totalAmount,
+                                  quantityFor: _quantityFor,
+                                  metricFor: _metricFor,
+                                  lineTotalFor: _lineTotalFor,
+                                  onEditWeight: _editWeight,
+                                  onEditPrice: _editPrice,
+                                  onRemoveLine: _removeDraftLine,
+                                  onClearAll: _draftCatalogItems.isEmpty
+                                      ? null
+                                      : _clearCurrentBill,
+                                ),
+                              ],
                             ),
                           ),
-                          SliverLayoutBuilder(
-                            builder: (context, constraints) {
-                              final width = constraints.crossAxisExtent;
-                              final crossAxisCount = width < 430
-                                  ? 1
-                                  : width < 900
-                                  ? 2
-                                  : 3;
-                              final childAspectRatio = crossAxisCount == 1
-                                  ? 1.1
-                                  : crossAxisCount == 2
-                                  ? 1.3
-                                  : 1.1;
+                        ),
+                        SliverLayoutBuilder(
+                          builder: (context, constraints) {
+                            final width = constraints.crossAxisExtent;
+                            final crossAxisCount = width < 430
+                                ? 1
+                                : width < 900
+                                ? 2
+                                : 3;
+                            final childAspectRatio = crossAxisCount == 1
+                                ? 1.1
+                                : crossAxisCount == 2
+                                ? 1.3
+                                : 1.1;
 
-                              return SliverPadding(
-                                padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-                                sliver: SliverGrid(
-                                  gridDelegate:
-                                      SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: crossAxisCount,
-                                        mainAxisSpacing: 16,
-                                        crossAxisSpacing: 16,
-                                        childAspectRatio: childAspectRatio,
-                                      ),
-                                  delegate: SliverChildBuilderDelegate((
-                                    context,
-                                    index,
-                                  ) {
-                                    final fruit = _visibleCatalog[index];
-                                    return FruitTile(
-                                      fruit: fruit,
-                                      quantityKg: _quantityFor(fruit),
-                                      displayMetric: _metricFor(fruit),
-                                      unitPrice: _priceFor(fruit),
-                                      lineTotal: _lineTotalFor(fruit),
-                                      onEditWeight: () => _editWeight(fruit),
-                                      onIncrement: () => _incrementFruit(
-                                        fruit,
-                                        fruit.defaultIncrement,
-                                      ),
-                                      onDecrement: () => _decrementFruit(fruit),
-                                      onEditPrice: () => _editPrice(fruit),
-                                    );
-                                  }, childCount: _visibleCatalog.length),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
+                            return SliverPadding(
+                              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                              sliver: SliverGrid(
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: crossAxisCount,
+                                      mainAxisSpacing: 16,
+                                      crossAxisSpacing: 16,
+                                      childAspectRatio: childAspectRatio,
+                                    ),
+                                delegate: SliverChildBuilderDelegate((
+                                  context,
+                                  index,
+                                ) {
+                                  final fruit = _visibleCatalog[index];
+                                  return FruitTile(
+                                    fruit: fruit,
+                                    quantityKg: _quantityFor(fruit),
+                                    displayMetric: _metricFor(fruit),
+                                    unitPrice: _priceFor(fruit),
+                                    lineTotal: _lineTotalFor(fruit),
+                                    onEditWeight: () => _editWeight(fruit),
+                                    onIncrement: () => _incrementFruit(
+                                      fruit,
+                                      fruit.defaultIncrement,
+                                    ),
+                                    onDecrement: () => _decrementFruit(fruit),
+                                    onEditPrice: () => _editPrice(fruit),
+                                  );
+                                }, childCount: _visibleCatalog.length),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ),
+                  ),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
@@ -935,21 +936,20 @@ Widget _buildSalesTab() {
                         foregroundColor: Colors.white,
                         textStyle: const TextStyle(
                           fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
+                          fontWeight: FontWeight.w800,
                         ),
-                        icon: const Icon(Icons.receipt_long, size: 24),
-                        label: const Text('Finish Transaction'),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
                       ),
+                      icon: const Icon(Icons.receipt_long, size: 24),
+                      label: const Text('Finish Transaction'),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          
+          ),
         ],
       ),
     );

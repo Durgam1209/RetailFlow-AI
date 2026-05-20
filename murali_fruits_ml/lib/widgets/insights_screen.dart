@@ -72,6 +72,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
           final bundles = _decodeList(data['suggested_bundles']);
           final forecasts = _decodeList(data['stock_advice']);
           final festivalAdvice = _decodeMap(data['festival_advice']);
+          final weatherAdvice = _decodeMap(data['weather_advice']);
+          final visibleWeatherAdvice = weatherAdvice.isNotEmpty
+              ? weatherAdvice
+              : _weatherAdviceFromForecasts(forecasts);
           final placementPlan = _buildPlacementPlan(
             forecasts: forecasts,
             bundles: bundles,
@@ -98,6 +102,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 if (_isFestivalAdviceActive(festivalAdvice)) ...<Widget>[
                   const SizedBox(height: 12),
                   _FestivalBanner(advice: festivalAdvice),
+                ],
+                if (visibleWeatherAdvice.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 12),
+                  _WeatherAdviceBanner(advice: visibleWeatherAdvice),
                 ],
                 const SizedBox(height: 18),
                 Align(
@@ -176,6 +184,27 @@ class _InsightsScreenState extends State<InsightsScreen> {
       }
     } catch (_) {
       return <String, dynamic>{};
+    }
+    return <String, dynamic>{};
+  }
+
+  Map<String, dynamic> _weatherAdviceFromForecasts(List<dynamic> forecasts) {
+    for (final forecast in forecasts) {
+      final row = forecast is Map<String, dynamic>
+          ? forecast
+          : forecast is Map
+          ? Map<String, dynamic>.from(forecast)
+          : null;
+      if (row == null || row['weather_adjustment'] == null) {
+        continue;
+      }
+      return <String, dynamic>{
+        'condition': row['weather_condition'] ?? 'Weather',
+        'min_temperature': row['weather_min_temperature'],
+        'max_temperature': row['weather_max_temperature'],
+        'recommended_fruits': row['weather_recommended_fruits'] ?? const [],
+        'action': row['weather_adjustment'],
+      };
     }
     return <String, dynamic>{};
   }
@@ -516,6 +545,75 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
+class _WeatherAdviceBanner extends StatelessWidget {
+  const _WeatherAdviceBanner({required this.advice});
+
+  final Map<String, dynamic> advice;
+
+  @override
+  Widget build(BuildContext context) {
+    final condition = advice['condition']?.toString() ?? 'Weather';
+    final temperature = advice['temperature'];
+    final minTemperature = advice['min_temperature'];
+    final maxTemperature = advice['max_temperature'];
+    final action = advice['action']?.toString() ?? 'Adjust stock for tomorrow.';
+    final fruits = _asStringList(advice['recommended_fruits']);
+    final temperatureLabel = minTemperature != null && maxTemperature != null
+        ? 'Min $minTemperature C / Max $maxTemperature C'
+        : temperature == null
+        ? ''
+        : '$temperature C';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F4FF),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFB8D8F2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const Icon(Icons.wb_cloudy_rounded, color: Color(0xFF1769AA)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Tomorrow: $condition${temperatureLabel.isEmpty ? '' : ' - $temperatureLabel'}',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            action,
+            style: const TextStyle(
+              color: Color(0xFF355165),
+              fontWeight: FontWeight.w800,
+              height: 1.35,
+            ),
+          ),
+          if (fruits.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: fruits.map((fruit) {
+                return _StatusChip(label: fruit);
+              }).toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _ForecastList extends StatelessWidget {
   const _ForecastList({required this.forecasts});
 
@@ -548,6 +646,10 @@ class _ForecastList extends StatelessWidget {
         final eventAdjustment = _field(
           forecast,
           'event_adjustment',
+        )?.toString();
+        final weatherAdjustment = _field(
+          forecast,
+          'weather_adjustment',
         )?.toString();
         final topFruits = _asDynamicList(_field(forecast, 'top_fruits'));
         final confidence =
@@ -628,6 +730,10 @@ class _ForecastList extends StatelessWidget {
                       if (eventAdjustment != null) ...<Widget>[
                         const SizedBox(height: 8),
                         _EventNote(label: eventAdjustment),
+                      ],
+                      if (weatherAdjustment != null) ...<Widget>[
+                        const SizedBox(height: 8),
+                        _EventNote(label: weatherAdjustment),
                       ],
                       if (topFruits.isNotEmpty) ...<Widget>[
                         const SizedBox(height: 10),
@@ -919,12 +1025,13 @@ class _FruitBreakdown extends StatelessWidget {
         final stock = _field(fruit, 'stock_label')?.toString() ?? name;
         final revenue = _field(fruit, 'revenue_label')?.toString() ?? '';
         final isFestivalPick = _field(fruit, 'is_festival_pick') == true;
+        final isWeatherPick = _field(fruit, 'is_weather_pick') == true;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 6),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           decoration: BoxDecoration(
-            color: isFestivalPick
+            color: isFestivalPick || isWeatherPick
                 ? const Color(0xFFFFF0BF)
                 : const Color(0xFFF8F4EE),
             borderRadius: BorderRadius.circular(8),
@@ -934,9 +1041,11 @@ class _FruitBreakdown extends StatelessWidget {
               Icon(
                 isFestivalPick
                     ? Icons.priority_high_rounded
+                    : isWeatherPick
+                    ? Icons.wb_cloudy_rounded
                     : Icons.inventory_rounded,
                 size: 17,
-                color: isFestivalPick
+                color: isFestivalPick || isWeatherPick
                     ? const Color(0xFF9A5A00)
                     : const Color(0xFF5E534B),
               ),

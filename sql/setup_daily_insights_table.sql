@@ -9,13 +9,15 @@ CREATE TABLE IF NOT EXISTS public.daily_insights (
   suggested_bundles JSONB NOT NULL DEFAULT '[]'::jsonb,
   stock_advice JSONB NOT NULL DEFAULT '[]'::jsonb,
   festival_advice JSONB NOT NULL DEFAULT '{}'::jsonb,
+  weather_advice JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
 -- Add the festival advice column for existing installations
 ALTER TABLE public.daily_insights
-  ADD COLUMN IF NOT EXISTS festival_advice JSONB NOT NULL DEFAULT '{}'::jsonb;
+  ADD COLUMN IF NOT EXISTS festival_advice JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS weather_advice JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 -- Enable RLS (Row Level Security)
 ALTER TABLE public.daily_insights ENABLE ROW LEVEL SECURITY;

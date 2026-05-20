@@ -16,8 +16,9 @@ class SyncRunResult {
 
 class SupabaseSyncService {
   static const String _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-  static const String _supabaseAnonKey =
-      String.fromEnvironment('SUPABASE_ANON_KEY');
+  static const String _supabaseAnonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+  );
 
   bool get isConfigured =>
       _supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty;
@@ -65,19 +66,23 @@ class SupabaseSyncService {
           'is_synced': false,
         };
 
-        // Include weather data if available
         if (transaction['weather'] != null) {
-          final weather = transaction['weather'] as Map<String, dynamic>;
-          payload['weather_temperature'] = weather['temperature'];
-          payload['weather_condition'] = weather['condition'];
-          payload['weather_humidity'] = weather['humidity'];
-          payload['weather_wind_speed'] = weather['windSpeed'];
+          final weather = Map<String, dynamic>.from(
+            transaction['weather'] as Map,
+          );
+          final todayWeather = weather['today'] is Map
+              ? Map<String, dynamic>.from(weather['today'] as Map)
+              : weather;
+          payload['weather'] = weather;
+          payload['weather_temperature'] = todayWeather['temperature'];
+          payload['weather_condition'] = todayWeather['condition'];
+          payload['weather_humidity'] = todayWeather['humidity'];
+          payload['weather_wind_speed'] = todayWeather['windSpeed'];
         }
 
-        await client.from('sales_log').upsert(
-          payload,
-          onConflict: 'transaction_id',
-        );
+        await client
+            .from('sales_log')
+            .upsert(payload, onConflict: 'transaction_id');
 
         await salesHelper.markTransactionSynced(transactionId);
         syncedCount += 1;
@@ -101,8 +106,7 @@ class SupabaseSyncService {
     return SyncRunResult(
       syncedCount: syncedCount,
       failedCount: failedCount,
-      message:
-          'Synced $syncedCount sale(s), failed on $failedCount sale(s)',
+      message: 'Synced $syncedCount sale(s), failed on $failedCount sale(s)',
     );
   }
 }
