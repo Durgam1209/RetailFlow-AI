@@ -1,231 +1,196 @@
-# RetailFlow AI
 
-RetailFlow AI is a small business tool for fruit shops. It combines a Flutter point-of-sale app with a Python insights pipeline so a shopkeeper can:
+```markdown
+# RetailFlow AI 🚀
 
-- record daily fruit sales quickly
-- work offline and sync later
-- view demand forecasts and revenue estimates
-- see festival-aware stocking advice
-- place fruits on a visual shop layout using AI-driven suggestions
+An end-to-end, production-grade MLOps retail intelligence platform designed for hyperlocal supply chains and perishable goods micro-retail operations. 
 
-## Project Overview
+RetailFlow AI transforms manual storefront operations into a data-driven ecosystem. It combines an offline-first Flutter web/mobile application with an automated serverless Python machine learning pipeline that ingests live transactional data, applies environmental and contextual feature engineering, and streams actionable business intelligence straight to the shop floor to systematically mitigate inventory wastage and maximize revenue margins.
 
-This repo has two main parts:
+---
 
-- `murali_fruits_ml/`
-  A Flutter app for sales entry, local draft billing, Supabase sync, and the AI Insights UI.
-- `ml_pipeline/`
-  A Python pipeline that reads sales data, runs basket analysis and demand forecasting, then writes insights back to Supabase.
+## 🔗 Production Deployments & Actions
+- **Live Production Web Application:** [https://retail-flow-ai-fb-hosting66.web.app/](https://retail-flow-ai-fb-hosting66.web.app/)
+- **Automated MLOps Pipeline Status:** ![ML Pipeline](https://github.com/Durgam1209/RetailFlow-AI/actions/workflows/main.yml/badge.svg)
 
-There are also SQL setup scripts in `sql/` for the required Supabase tables and policies.
+---
 
-## Key Features
+## 📸 Production Application Showroom
 
-### Sales app
+### 1. Storefront Point-of-Sale (POS) Engine
+The frontend client architecture enforces a strict **Offline-First transactional queue pattern**. POS tasks capture weight adjustments dynamically, caching data inside local NoSQL structures to protect system availability against unstable network conditions on the shop floor.
 
-- quick fruit selection with editable weight and price
-- local-first draft billing using Hive
-- offline-safe transaction storage
-- manual product management
-- current bill panel for safer checkout
+| POS Product Catalog Matrix | Micro-Reactive Billing | Dynamic Checkout Verification |
+| :---: | :---: | :---: |
+| <img src="murali_fruits_ml/assets/images/pos_catalog.png" width="230" alt="POS Catalog Grid"/> | <img src="murali_fruits_ml/assets/images/pos_billing.png" width="230" alt="POS Realtime Billing"/> | <img src="murali_fruits_ml/assets/images/pos_checkout.png" width="230" alt="POS Checkout Safe Panel"/> |
+| *NoSQL-backed local cache rendering real-time stock matrix grids.* | *Safer transactional confirmation layout preventing rounding errors.* | *Incremental precision scaling matching standard micro-retail increments.* |
 
-### AI insights
+---
 
-- 7-day revenue-oriented stock plan
-- per-fruit stock suggestions
-- festival and holiday alerts for Indian holidays
-- smart bundle suggestions from actual sales data
-- visual placement plan shown on the shop layout image
+### 2. Live Sales Performance Analytics Dashboards
+To optimize system execution speeds, the client layer bypasses heavy client-side computation. It taps directly into pre-aggregated database views via `fl_chart`, executing animated, real-time telemetry rendering with automated peak-performance threshold tracking.
 
-## Shop Layout View
+| Financial Revenue Vectors | Running Daily Checkout Volume | Historical Log Ingestions |
+| :---: | :---: | :---: |
+| <img src="murali_fruits_ml/assets/images/analytics_revenue.png" width="230" alt="Weekly Revenue Dashboard"/> | <img src="murali_fruits_ml/assets/images/analytics_volume.png" width="230" alt="Transaction Traffic Volume"/> | <img src="murali_fruits_ml/assets/images/analytics_history.png" width="230" alt="Historical Ledger Auditing"/> |
+| *Weekly income trends highlighting peak revenue days via green thresholds.* | *Granular transactional volume tracking detailing traffic rhythms.* | *Comprehensive historical audits pulled directly from local storage collections.* |
 
-The AI Insights tab includes a placement board built on the current layout image in the repo.
+---
 
-![Shop layout](murali_fruits_ml/assets/images/shop_layout.png)
+### 3. AI Predictive Insights & Spatial Merchandising
+Complex mathematical data structures from the MLOps pipeline are simplified into straightforward visual cues. The platform displays real-time weather adjustments, holiday warnings, and cross-purchasing affinity patterns mapped onto a spatial storefront matrix layout to guide daily inventory decisions.
 
-This layout is used to place fruits into zones like:
+| Pipeline Predictions Dashboard | Spatial Merchandising Map | Affinity Basket Recommendations |
+| :---: | :---: | :---: |
+| <img src="murali_fruits_ml/assets/images/ai_predictions.png" width="230" alt="Predictive Analytics Feed"/> | <img src="murali_fruits_ml/assets/images/shop_layout.png" width="230" alt="AI Shop Layout Overlay"/> | <img src="murali_fruits_ml/assets/images/ai_bundles.png" width="230" alt="Market Basket Affinities"/> |
+| *7-day advanced stock plans generated via Prophet time-series data calculations.* | *Zone-based layout engine overlaying placement cues on store floorplans.* | *Item bundling pairings derived dynamically from Apriori rules mining.* |
 
-- elevated display
-- table 1
-- table 2
-- quick flow items
-- weighing and billing counter
+---
 
-The current implementation uses the repo image, and the UI is already structured so a real shop photo can replace it later.
+### 4. Cloud MLOps Infrastructure Logs
+The end-to-end telemetry system is orchestrated entirely in the cloud. Scheduled GitHub Actions workflows track model drift by writing performance evaluations directly back to Supabase PostgreSQL, ensuring the system requires zero developer maintenance.
 
-## How It Works
+#### Nightly Automation Workflow Performance Tracking (GitHub Actions Console)
+![GitHub Actions Workflow Run](murali_fruits_ml/assets/images/mlops_pipeline_log.png)
+*Automated background runner script provisioning isolated runtime layers, executing Python feature engineering tasks, and checking for data drift.*
 
-### Data flow
+#### Core Database Schema Analytics & Relational Collections View (Supabase Management Layer)
+![Supabase Database Tables Dashboard](murali_fruits_ml/assets/images/supabase_dashboard.png)
+*Serverless storage configuration mapping secure row-level security parameters, database index clusters, and highly performant analytical compute scripts.*
 
-1. The Flutter app records transactions locally.
-2. Transactions sync to Supabase `sales_log`.
-3. The Python pipeline reads sales data from Supabase and local enriched training data.
-4. The pipeline creates:
-   - bundle recommendations
-   - 7-day stock and revenue forecasts
-   - festival advice
-5. The pipeline writes the final result to Supabase `daily_insights`.
-6. The Flutter AI Insights tab reads the latest `daily_insights` row and renders the dashboard.
+---
 
-### Main tables
+## 🛠️ Tech Stack & Architecture
 
-- `sales_log`
-  Raw sales transactions from the Flutter app.
-- `daily_insights`
-  Generated AI output used by the app.
+### Frontend Ecosystem (Client Layer)
+- **Framework:** Flutter (Web & Mobile Engine)
+- **Local Persistence:** Hive Storage (NoSQL local-first database caching)
+- **State Management & UI Elements:** Dynamic data tracking streams paired with micro-reactive animations
+- **Data Visualizations:** `fl_chart` (Advanced real-time, animated revenue & checkout volume metrics charts)
+- **Hosting Engine:** Firebase Hosting (CDN cached edge delivery)
 
-## Repository Structure
+### Backend & Core Infrastructure (Data Layer)
+- **Cloud Backend:** Supabase (Serverless PostgreSQL Database infrastructure)
+- **Data Pipeline Engine:** Python with Pandas & NumPy numerical vectors
+- **Time-Series Forecaster:** Facebook Prophet Engine (7-day ahead regional demand & revenue volume regressions)
+- **Association Rule Miner:** `mlxtend` (Apriori algorithm for real-time market-basket purchasing affinity extraction)
+- **Contextual Feature Engineering:** External national Indian holiday calendars (`holidays`) & OpenWeather API connections
+
+### MLOps & Orchestration (Automation Layer)
+- **CI/CD Pipeline Platform:** GitHub Actions
+- **Workflow Automations:** Nightly cron execution loops managing secure virtual machine provisioning, continuous data enrichment pipelines, automated model retraining, and live build updates.
+
+---
+
+## 🔄 End-to-End Data Value Chain
+
+The entire architecture functions as a self-sustaining data loop requiring zero manual technical maintenance:
+
+```text
+ [ Storefront Counter ] ──> Local Hive NoSQL Cache (Offline-First)
+                                    │
+                                    ▼ (Automatic Sync on Connection)
+ [ Supabase PostgreSQL ] ──> Ingests Raw Transactional Log Tables
+                                    │
+                                    ▼ (Nightly GitHub Actions Cron Trigger)
+ [ Python ETL Engine ]  ──> Fetches Weather API Signals & Indian Holiday Vectors
+                                    │
+                                    ▼ (Asynchronous Model Training)
+ [ ML Inference Loops ] ──> Runs Prophet Time-Series & Apriori Market-Basket rules
+                                    │
+                                    ▼ (Pre-computed Database View Writing)
+ [ Actionable Signals ] ──> Streams Low-Latency Insights to Live Dashboard UI
+
+```
+
+1. **Ingestion:** Transactions are logged securely via the Flutter UI. If network drops occur, transactions are securely cached locally using Hive NoSQL boxes and seamlessly bulk-synced to Supabase PostgreSQL when internet connectivity returns.
+2. **Serverless Enrichment:** Every night, GitHub Actions provisions a clean environment, extracts the latest sales logs, and joins the transaction stream with live OpenWeather API data and localized holiday calendars.
+3. **Inference & Logging:** The machine learning scripts retrain the Prophet and Apriori models, output fresh 7-day safety buffers and bundle recommendations, compute model error percentages (MAE/RMSE) to track data drift, and write records to a `daily_insights` repository table.
+4. **Delivery:** The live production app reads the single latest insight vector and populates interactive dashboard graphs, event-driven warning badges, and zone-based merchandising suggestions directly on the shop floor layout map.
+
+---
+
+## 🗄️ Repository Structure
 
 ```text
 RetailFlowAI/
-├── ml_pipeline/
-│   ├── data/
+├── .github/workflows/               # CI/CD Infrastructure Automations
+│   ├── main.yml                     # Main Scheduled Nightly MLOps Compute Loop
+│   ├── firebase-hosting-merge.yml   # Production CD Deployment to Firebase Web
+│   └── firebase-hosting-pull-request.yml
+├── ml_pipeline/                     # Machine Learning Pipeline Core
+│   ├── data/processed/              # Localized/Sanitized Model Training Datasets
+│   ├── logs/
+│   │   └── performance_history.csv  # Historic Pipeline Regression Metric Checks (MAE/RMSE)
 │   ├── models/
-│   ├── enrich_data.py
-│   ├── main.py
-│   └── requirements.txt
-├── murali_fruits_ml/
-│   ├── assets/images/
+│   │   ├── basket_analyzer.py       # Apriori Association Rules Compiler
+│   │   └── demand_forecaster.py     # Facebook Prophet Core Engine 
+│   ├── enrich_data.py               # Weather & Calendar Feature Engineering Pipeline
+│   ├── main.py                      # Main Python Orchestrator Execution Script
+│   └── requirements.txt             # Backend Dependency Vectors
+├── murali_fruits_ml/                # Cross-Platform Flutter Interface
+│   ├── assets/images/               # UI Visual Merchandising Shop Assets
 │   ├── lib/
-│   │   ├── data/
-│   │   ├── models/
-│   │   └── widgets/
-│   └── pubspec.yaml
-├── sql/
-│   ├── setup_daily_insights_table.sql
-│   └── supabase_sales_log.sql
-├── INSIGHTS_SETUP.md
-└── README.md
+│   │   ├── data/                    # Hive Caching & Supabase Sync Services
+│   │   ├── models/                  # Strictly Typed Dart Object Definitions
+│   │   └── widgets/                 # Insight Dashboards, Analytics Screens, & Tiles
+│   └── pubspec.yaml                 # Flutter App Core Configurations
+└── sql/                             # Database Structure & Aggregation Blueprints
+    ├── setup_daily_insights_table.sql
+    └── supabase_sales_log.sql       # Relational Schema Design & View Functions
+
 ```
 
-## Tech Stack
+---
 
-### Frontend
+## 🚀 Setting Up the Project
 
-- Flutter
-- Hive
-- Supabase Flutter SDK
-- connectivity_plus
+### 1. Database View & Schema Construction
 
-### Backend / ML
+Log in to your Supabase Console, navigate to the **SQL Editor**, and execute the scripts located in the `/sql` repository path to configure your tables, relationships, and specialized analytical views.
 
-- Python
-- pandas
-- Prophet
-- mlxtend
-- holidays
-- python-dotenv
-- Supabase Python client
+### 2. Python ML Pipeline Configuration
 
-## Setup
+Navigate to the ML directory and install the required dependencies:
 
-### 1. Supabase
-
-Run these SQL scripts in your Supabase project:
-
-- `sql/supabase_sales_log.sql`
-- `sql/setup_daily_insights_table.sql`
-
-That creates the required tables, indexes, and row-level security rules.
-
-### 2. Python pipeline setup
-
-Install dependencies:
-
-```powershell
-cd C:\projects\RetailFlowAI\ml_pipeline
+```bash
+cd ml_pipeline
 python -m pip install -r requirements.txt
+
 ```
 
-Create `ml_pipeline/.env` with your backend credentials:
+Construct a localized configuration environment profile (`.env`) in the root of your `ml_pipeline/` directory:
 
 ```env
-SUPABASE_URL=your_supabase_url
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+SUPABASE_URL="[https://your-project-id.supabase.co](https://your-project-id.supabase.co)"
+SUPABASE_SERVICE_ROLE_KEY="your-high-privilege-service-role-key"
+
 ```
 
-### 3. Flutter app setup
+### 3. Flutter Client App Compilation
 
-Run the app with Supabase values passed in as Dart defines:
+To execute the frontend locally or prepare web build distribution packages, inject the environment endpoints securely using compilation definitions:
 
-```powershell
-cd C:\projects\RetailFlowAI\murali_fruits_ml
-flutter run --dart-define=SUPABASE_URL=your_supabase_url --dart-define=SUPABASE_ANON_KEY=your_supabase_anon_key
+```bash
+cd murali_fruits_ml
+flutter run --dart-define=SUPABASE_URL="[https://your-project-id.supabase.co](https://your-project-id.supabase.co)" --dart-define=SUPABASE_ANON_KEY="your-public-anon-key"
+
 ```
 
-## Running the AI Pipeline
+### 4. Running Production Web Build and Deployments Manually
 
-From the repo root:
+If you choose to bypass the GitHub Actions workflow and deploy directly from your local terminal configuration:
 
-```powershell
-cd C:\projects\RetailFlowAI
-python ml_pipeline/main.py
+```bash
+flutter build web --release --dart-define=SUPABASE_URL="YOUR_URL" --dart-define=SUPABASE_ANON_KEY="YOUR_KEY"
+firebase deploy --only hosting
+
 ```
 
-This will:
+---
 
-- fetch sales data
-- run market basket analysis
-- build a 7-day forecast
-- generate festival-aware advice
-- push the final insight record to Supabase
+## 📊 Real-World Production Optimizations Enforced
 
-## Insights Produced
-
-The `daily_insights` payload includes:
-
-- `forecast_summary`
-- `suggested_bundles`
-- `stock_advice`
-- `festival_advice`
-- `created_at`
-
-The app uses these to show:
-
-- revenue-first forecast cards
-- top fruits to prepare
-- event-driven alerts
-- bundle recommendations
-- placement suggestions on the layout image
-
-## Notes About Local Data
-
-Local data files are intentionally ignored by Git.
-
-Examples:
-
-- `ml_pipeline/data/`
-- `*.csv`
-- local environment files like `.env`
-
-This helps avoid committing private or generated data.
-
-## Current Product Direction
-
-The project is moving from a generic demo into a real shop operations tool. Recent UI work focuses on:
-
-- safer billing flow
-- stronger revenue visibility
-- clearer AI trust signals
-- visual merchandising guidance instead of text-only advice
-
-## Troubleshooting
-
-If insights are not showing up:
-
-- make sure both Supabase SQL scripts were run
-- verify `daily_insights` has fresh rows
-- confirm Flutter is using the anon key
-- confirm the Python pipeline is using the service role key
-
-For more detailed setup help, see [INSIGHTS_SETUP.md](INSIGHTS_SETUP.md).
-
-## Future Improvements
-
-- swap the layout image with a real shop photo
-- editable zone mapping from inside the app
-- better per-fruit forecasting with more historical data
-- richer festival-specific demand logic
-- history cleanup for previously committed local data if needed
-
-
+* **Database-Side Compute Aggregations:** Leverages custom PostgreSQL aggregation views to process running transactional totals on the cloud, reducing mobile client memory footprints and maximizing network load efficiency.
+* **Drift-Aware Monitoring:** Automatically prints and logs performance validation history logs (`performance_history.csv`) during every retraining cycle to prevent time-series forecast drift on noisy real-world data arrays.
+* **Resilient Data Sanitation Fallbacks:** Outfitted with robust fallback model syntax parsing rules (`??` operator filters) inside your Dart serializers (`fruit_item.dart` / `transaction_item.dart`), seamlessly protecting your application from schema evolution crashes when reading historical data records.
+* **Enterprise-Grade Client Persistence:** Built on an offline-first architecture utilizing strict transactional queues, providing business continuity under unstable connectivity conditions on the shop floor.
