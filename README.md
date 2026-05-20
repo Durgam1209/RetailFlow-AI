@@ -21,7 +21,7 @@ The frontend client architecture enforces a strict **Offline-First transactional
 
 | POS Product Catalog Matrix | Micro-Reactive Billing | Dynamic Checkout Verification |
 | :---: | :---: | :---: |
-| <img src="https://raw.githubusercontent.com/Durgam1209/RetailFlow-AI/main/murali_fruits_ml/assets/images/pos_catalog.png" width="230" alt="POS Catalog Grid"/> | <img src="https://raw.githubusercontent.com/Durgam1209/RetailFlow-AI/main/murali_fruits_ml/assets/images/pos_billing.png" width="230" alt="POS Realtime Billing"/> | <img src="https://raw.githubusercontent.com/Durgam1209/RetailFlow-AI/main/murali_fruits_ml/assets/images/pos_checkout.png" width="230" alt="POS Checkout Safe Panel"/> |
+| <img src="./murali_fruits_ml/assets/images/pos_catalog.png" width="230" alt="POS Catalog Grid"/> | <img src="./murali_fruits_ml/assets/images/pos_billing.png" width="230" alt="POS Realtime Billing"/> | <img src="./murali_fruits_ml/assets/images/pos_checkout.png" width="230" alt="POS Checkout Safe Panel"/> |
 | *NoSQL-backed local cache rendering real-time stock matrix grids.* | *Safer transactional confirmation layout preventing rounding errors.* | *Incremental precision scaling matching standard micro-retail increments.* |
 
 ---
@@ -31,7 +31,7 @@ To optimize system execution speeds, the client layer bypasses heavy client-side
 
 | Financial Revenue Vectors | Running Daily Checkout Volume | Historical Log Ingestions |
 | :---: | :---: | :---: |
-| <img src="https://raw.githubusercontent.com/Durgam1209/RetailFlow-AI/main/murali_fruits_ml/assets/images/analytics_revenue.png" width="230" alt="Weekly Revenue Dashboard"/> | <img src="https://raw.githubusercontent.com/Durgam1209/RetailFlow-AI/main/murali_fruits_ml/assets/images/analytics_volume.png" width="230" alt="Transaction Traffic Volume"/> | <img src="https://raw.githubusercontent.com/Durgam1209/RetailFlow-AI/main/murali_fruits_ml/assets/images/analytics_history.png" width="230" alt="Historical Ledger Auditing"/> |
+| <img src="./murali_fruits_ml/assets/images/analytics_revenue.png" width="230" alt="Weekly Revenue Dashboard"/> | <img src="./murali_fruits_ml/assets/images/analytics_volume.png" width="230" alt="Transaction Traffic Volume"/> | <img src="./murali_fruits_ml/assets/images/analytics_history.png" width="230" alt="Historical Ledger Auditing"/> |
 | *Weekly income trends highlighting peak revenue days via green thresholds.* | *Granular transactional volume tracking detailing traffic rhythms.* | *Comprehensive historical audits pulled directly from local storage collections.* |
 
 ---
@@ -41,7 +41,7 @@ Complex mathematical data structures from the MLOps pipeline are simplified into
 
 | Pipeline Predictions Dashboard | Spatial Merchandising Map | Affinity Basket Recommendations |
 | :---: | :---: | :---: |
-| <img src="https://raw.githubusercontent.com/Durgam1209/RetailFlow-AI/main/murali_fruits_ml/assets/images/ai_predictions.png" width="230" alt="Predictive Analytics Feed"/> | <img src="https://raw.githubusercontent.com/Durgam1209/RetailFlow-AI/main/murali_fruits_ml/assets/images/shop_layout.png" width="230" alt="AI Shop Layout Overlay"/> | <img src="https://raw.githubusercontent.com/Durgam1209/RetailFlow-AI/main/murali_fruits_ml/assets/images/ai_bundles.png" width="230" alt="Market Basket Affinities"/> |
+| <img src="./murali_fruits_ml/assets/images/ai_predictions.png" width="230" alt="Predictive Analytics Feed"/> | <img src="./murali_fruits_ml/assets/images/shop_layout.png" width="230" alt="AI Shop Layout Overlay"/> | <img src="./murali_fruits_ml/assets/images/ai_bundles.png" width="230" alt="Market Basket Affinities"/> |
 | *7-day advanced stock plans generated via Prophet time-series data calculations.* | *Zone-based layout engine overlaying placement cues on store floorplans.* | *Item bundling pairings derived dynamically from Apriori rules mining.* |
 
 ---
@@ -50,11 +50,11 @@ Complex mathematical data structures from the MLOps pipeline are simplified into
 The end-to-end telemetry system is orchestrated entirely in the cloud. Scheduled GitHub Actions workflows track model drift by writing performance evaluations directly back to Supabase PostgreSQL, ensuring the system requires zero developer maintenance.
 
 #### Nightly Automation Workflow Performance Tracking (GitHub Actions Console)
-![GitHub Actions Workflow Run](https://raw.githubusercontent.com/Durgam1209/RetailFlow-AI/main/murali_fruits_ml/assets/images/mlops_pipeline_log.png)
+![GitHub Actions Workflow Run](./murali_fruits_ml/assets/images/mlops_pipeline_log.png)
 *Automated background runner script provisioning isolated runtime layers, executing Python feature engineering tasks, and checking for data drift.*
 
 #### Core Database Schema Analytics & Relational Collections View (Supabase Management Layer)
-![Supabase Database Tables Dashboard](https://raw.githubusercontent.com/Durgam1209/RetailFlow-AI/main/murali_fruits_ml/assets/images/supabase_dashboard.png)
+![Supabase Database Tables Dashboard](./murali_fruits_ml/assets/images/supabase_dashboard.png)
 *Serverless storage configuration mapping secure row-level security parameters, database index clusters, and highly performant analytical compute scripts.*
 
 ---
