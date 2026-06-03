@@ -47,6 +47,10 @@ class SupabaseSyncService {
     var syncedCount = 0;
     var failedCount = 0;
 
+print(
+      '[SupabaseSyncService] Starting sync: pending=${pendingTransactions.length}',
+    );
+
     for (final transaction in pendingTransactions) {
       final transactionId = transaction['transactionId'] as String?;
       if (transactionId == null) {
@@ -80,13 +84,31 @@ class SupabaseSyncService {
           payload['weather_wind_speed'] = todayWeather['windSpeed'];
         }
 
-        await client
+        final upsertResponse = await client
             .from('sales_log')
             .upsert(payload, onConflict: 'transaction_id');
 
+        debugPrint(
+          '[SupabaseSyncService] upsert response for $transactionId: '
+          'count=${upsertResponse.count}, status=${upsertResponse.status}',
+        );
+
+        // Mark locally synced only after Supabase accepts the row
         await salesHelper.markTransactionSynced(transactionId);
+
         syncedCount += 1;
-      } catch (error) {
+      } catch (error, stackTrace) {
+        debugPrint(
+          '[SupabaseSyncService] upsert failed for $transactionId: '
+          '${error.toString()}',
+        );
+        debugPrint(
+          '[SupabaseSyncService] payload that failed: ${payload.toString()}',
+        );
+        debugPrint(
+          '[SupabaseSyncService] stackTrace: $stackTrace',
+        );
+
         await salesHelper.markTransactionSyncFailed(
           transactionId,
           error.toString(),
