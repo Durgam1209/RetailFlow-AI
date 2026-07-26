@@ -2,7 +2,7 @@
 
 An end-to-end retail intelligence platform for small-scale perishable-goods retailers. It pairs an offline-first Flutter POS app with a Python ML pipeline that ingests sales data, applies weather and holiday-aware feature engineering, and generates demand forecasts and product-bundling recommendations — closing the loop between point-of-sale and inventory decisions.
 
-**Live app:** [retail-flow-ai-fb-hosting66.web.app](https://retail-flow-ai-fb-hosting66.web.app/)
+**Live app:** [retail-flow-ai-fb-hosting66.web.app](https://retailflow-ai-fb-hosting66.web.app/)
 **Pipeline status:** ![ML Pipeline](https://github.com/Durgam1209/RetailFlow-AI/actions/workflows/main.yml/badge.svg)
 
 ---
