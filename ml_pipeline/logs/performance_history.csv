@@ -398,3 +398,4 @@ timestamp,status,bundles_generated,forecast_days,festival_active,total_records_f
 2026-08-24T12:24:34.273535,success,0,7,False,234,3507,8.64,48.5%,21
 2026-08-24T17:21:35.902609,success,0,7,False,234,3507,8.64,48.5%,21
 2026-08-24T18:23:14.523163,success,0,7,False,234,3507,8.64,48.5%,21
+2026-08-25T06:25:40.560621,success,0,7,True,234,3507,8.64,48.5%,21
