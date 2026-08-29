@@ -235,11 +235,28 @@ class _SummaryPanel extends StatelessWidget {
     final topFruit = _topFruitName(peak);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF113D2B),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.black, width: 1.5),
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF0F382C),
+            const Color(0xFF165B46),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F382C).withValues(alpha: 0.25),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.15),
+          width: 1.5,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -247,65 +264,104 @@ class _SummaryPanel extends StatelessWidget {
           Row(
             children: <Widget>[
               Container(
-                width: 44,
-                height: 44,
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFD166),
-                  borderRadius: BorderRadius.circular(8),
+                  color: const Color(0xFFFBBF24),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(
                   Icons.auto_graph_rounded,
-                  color: Colors.black,
+                  color: Color(0xFF0F382C),
+                  size: 26,
                 ),
               ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'AI Shop Insights',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF34D399),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'PROPHET ML PIPELINE ACTIVE',
+                          style: TextStyle(
+                            color: const Color(0xFF34D399),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'AI Shop Intelligence',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           Text(
             summary,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              height: 1.35,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.95),
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              height: 1.4,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           Wrap(
             spacing: 10,
             runSpacing: 10,
             children: <Widget>[
               _MetricPill(
-                label: 'Daily revenue',
+                label: 'Avg Daily Revenue',
                 value: _formatCurrency(averageRevenue),
               ),
               _MetricPill(
-                label: 'Peak day',
+                label: 'Peak Revenue Day',
                 value: _field(peak, 'display_date')?.toString() ?? 'Pending',
               ),
-              _MetricPill(label: 'Top stock focus', value: topFruit),
+              _MetricPill(label: 'Top Stock Focus', value: topFruit),
             ],
           ),
           if (updatedAt != null) ...<Widget>[
-            const SizedBox(height: 12),
-            Text(
-              'Updated ${_formatTimestamp(updatedAt)}',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.72),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Icon(
+                  Icons.access_time_rounded,
+                  size: 13,
+                  color: Colors.white.withValues(alpha: 0.6),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Updated ${_formatTimestamp(updatedAt)}',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.65),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ],
         ],

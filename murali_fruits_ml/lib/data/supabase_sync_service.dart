@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'hive_sales_helper.dart';
@@ -47,7 +48,7 @@ class SupabaseSyncService {
     var syncedCount = 0;
     var failedCount = 0;
 
-print(
+    debugPrint(
       '[SupabaseSyncService] Starting sync: pending=${pendingTransactions.length}',
     );
 
@@ -58,8 +59,9 @@ print(
         continue;
       }
 
+      Map<String, dynamic>? payload;
       try {
-        final payload = <String, dynamic>{
+        payload = <String, dynamic>{
           'transaction_id': transactionId,
           'created_at': transaction['createdAt'],
           'created_date': transaction['createdDate'],
@@ -84,13 +86,12 @@ print(
           payload['weather_wind_speed'] = todayWeather['windSpeed'];
         }
 
-        final upsertResponse = await client
+        await client
             .from('sales_log')
             .upsert(payload, onConflict: 'transaction_id');
 
         debugPrint(
-          '[SupabaseSyncService] upsert response for $transactionId: '
-          'count=${upsertResponse.count}, status=${upsertResponse.status}',
+          '[SupabaseSyncService] upserted $transactionId successfully',
         );
 
         // Mark locally synced only after Supabase accepts the row

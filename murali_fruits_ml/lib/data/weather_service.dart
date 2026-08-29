@@ -63,7 +63,6 @@ class WeatherData {
 }
 
 class WeatherService {
-  static const String _baseUrl = 'https://api.openweathermap.org/data/2.5';
   final String apiKey;
   final String cityName;
   final double? latitude;

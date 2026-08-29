@@ -267,8 +267,58 @@ class _SalesHomePageState extends State<SalesHomePage> {
   String? _syncMessage;
   int _pendingSyncCount = 0;
   String _searchQuery = '';
+  String _selectedCategory = 'All';
   WeatherData? _todayWeather;
   WeatherData? _tomorrowWeather;
+
+  static const List<String> _categories = <String>[
+    'All',
+    'Apples',
+    'Citrus',
+    'Tropical',
+    'Grapes',
+    'Melons',
+  ];
+
+  static String _categoryForFruit(String id) {
+    switch (id) {
+      case 'apple_poland':
+      case 'apple_washington':
+      case 'pomegranate':
+        return 'Apples';
+      case 'banana_big':
+      case 'banana_yelakki':
+      case 'papaya':
+        return 'Tropical';
+      case 'orange_citrus':
+      case 'orange_mandarin':
+      case 'orange_nagpur':
+      case 'musambi':
+        return 'Citrus';
+      case 'grapes_green':
+      case 'grapes_green_seedless':
+      case 'grapes_black':
+      case 'grapes_black_seedless':
+        return 'Grapes';
+      case 'watermelon':
+      case 'watermelon_kiran':
+        return 'Melons';
+      default:
+        return 'Other';
+    }
+  }
+
+  List<FruitItem> get _visibleCatalog {
+    var items = _catalog;
+    if (_selectedCategory != 'All') {
+      items = items.where((fruit) => _categoryForFruit(fruit.id) == _selectedCategory).toList();
+    }
+    if (_searchQuery.trim().isNotEmpty) {
+      final query = _searchQuery.trim().toLowerCase();
+      items = items.where((fruit) => fruit.name.toLowerCase().contains(query)).toList();
+    }
+    return items;
+  }
 
   @override
   void initState() {
@@ -644,17 +694,6 @@ class _SalesHomePageState extends State<SalesHomePage> {
     return items;
   }
 
-  List<FruitItem> get _visibleCatalog {
-    if (_searchQuery.trim().isEmpty) {
-      return _catalog;
-    }
-
-    final query = _searchQuery.trim().toLowerCase();
-    return _catalog.where((fruit) {
-      return fruit.name.toLowerCase().contains(query);
-    }).toList();
-  }
-
   String get _todayLabel {
     final now = DateTime.now();
     const months = <String>[
@@ -811,6 +850,44 @@ class _SalesHomePageState extends State<SalesHomePage> {
                                         vertical: 14,
                                       ),
                                     ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  height: 40,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: _categories.length,
+                                    separatorBuilder: (context, index) => const SizedBox(width: 8),
+                                    itemBuilder: (context, index) {
+                                      final cat = _categories[index];
+                                      final isSelected = cat == _selectedCategory;
+                                      return ChoiceChip(
+                                        label: Text(cat),
+                                        selected: isSelected,
+                                        selectedColor: const Color(0xFF0F382C),
+                                        backgroundColor: Colors.white.withValues(alpha: 0.9),
+                                        labelStyle: TextStyle(
+                                          color: isSelected ? Colors.white : const Color(0xFF1F1B18),
+                                          fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                                          fontSize: 13,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                          side: BorderSide(
+                                            color: isSelected ? const Color(0xFF0F382C) : const Color(0xFFE5DED3),
+                                          ),
+                                        ),
+                                        showCheckmark: false,
+                                        onSelected: (selected) {
+                                          if (selected) {
+                                            setState(() {
+                                              _selectedCategory = cat;
+                                            });
+                                          }
+                                        },
+                                      );
+                                    },
                                   ),
                                 ),
                                 const SizedBox(height: 18),
