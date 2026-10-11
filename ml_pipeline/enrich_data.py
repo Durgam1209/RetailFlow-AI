@@ -5,7 +5,7 @@ from pathlib import Path
 import dotenv
 import holidays
 import pandas as pd
-from config import configure_logging
+from config import configure_logging, runtime_metadata
 from supabase import create_client
 
 dotenv.load_dotenv()
@@ -58,7 +58,7 @@ def merge_weather(frame: pd.DataFrame, weather: pd.DataFrame | None) -> pd.DataF
 def main() -> None:
     """Fetch sales, attach known-date holiday context and export the training snapshot."""
     configure_logging()
-    LOGGER.info("Fetching data from Supabase")
+    LOGGER.info("Fetching data from Supabase", extra={"runtime": runtime_metadata()})
     response = supabase.table("sales_log").select("*").execute()
     df = pd.DataFrame(response.data)
     LOGGER.info("Fetched sales rows", extra={"row_count": len(df)})

@@ -54,6 +54,7 @@ from config import (
     WEATHER_TIMEOUT_SECONDS,
     WHOLE_KG_LABEL_THRESHOLD,
     configure_logging,
+    runtime_metadata,
 )
 from models.basket_analyzer import run_basket_analysis
 from models.demand_forecaster import run_demand_forecasting
@@ -965,7 +966,10 @@ def _push_insight_payload(payload: dict) -> Any:
 def main() -> int:
     """Run validation, basket analysis, forecasting and publish; return nonzero when degraded."""
     configure_logging()
-    LOGGER.info("Starting RetailFlow AI intelligence pipeline")
+    LOGGER.info(
+        "Starting RetailFlow AI intelligence pipeline",
+        extra={"runtime": runtime_metadata()},
+    )
     outcomes: list[StageOutcome] = []
     degradation_reasons: list[str] = []
     validation = _run_stage("validate", fetch_and_prepare_data)

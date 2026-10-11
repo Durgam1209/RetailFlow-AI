@@ -5,12 +5,21 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
+import subprocess
 import sys
 from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 
 import dotenv
+import numpy as np
 
 dotenv.load_dotenv()
+
+RANDOM_SEED = int(os.getenv("ML_RANDOM_SEED", "42"))
+random.seed(RANDOM_SEED)
+np.random.seed(RANDOM_SEED)
 
 LOGGER_NAME = "retailflow.ml_pipeline"
 
@@ -149,3 +158,30 @@ def configure_logging() -> None:
         handlers=[handler],
         force=True,
     )
+
+
+def runtime_metadata() -> dict[str, str | int]:
+    """Return Python/library versions and the current repository commit for run logs."""
+    package_names = ("pandas", "numpy", "prophet", "mlxtend", "supabase", "holidays")
+    versions: dict[str, str | int] = {
+        "python_version": sys.version.split()[0],
+        "random_seed": RANDOM_SEED,
+    }
+    for package_name in package_names:
+        try:
+            versions[f"{package_name}_version"] = version(package_name)
+        except PackageNotFoundError:
+            versions[f"{package_name}_version"] = "not-installed"
+    repo_root = Path(__file__).resolve().parent.parent
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        versions["git_sha"] = result.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        versions["git_sha"] = "unknown"
+    return versions
