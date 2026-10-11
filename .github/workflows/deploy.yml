@@ -1,0 +1,52 @@
+name: Deploy Flutter web to Firebase Hosting
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve Flutter dependencies
+        working-directory: murali_fruits_ml
+        run: flutter pub get
+      - name: Build Flutter web app
+        working-directory: murali_fruits_ml
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          with open('/tmp/retailflow-dart-defines.json', 'w', encoding='utf-8') as output:
+              json.dump({
+                  'SUPABASE_URL': os.environ.get('SUPABASE_URL', ''),
+                  'SUPABASE_PUBLISHABLE_KEY': os.environ.get('SUPABASE_PUBLISHABLE_KEY', ''),
+              }, output)
+          PY
+          flutter build web --release --dart-define-from-file=/tmp/retailflow-dart-defines.json
+      - name: Prepare Firebase Hosting content
+        run: cp -a murali_fruits_ml/build/web/. public/
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0.11.0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_RETAILFLOW_AI_FB_HOSTING66 }}
+          projectId: retailflow-ai-fb-hosting66
+          channelId: live

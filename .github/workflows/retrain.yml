@@ -1,0 +1,80 @@
+name: Nightly ML retrain
+
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-retrain-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      WEATHER_KEY: ${{ secrets.WEATHER_KEY }}
+      SLACK_WEBHOOK_URL: ${{ secrets.ALERT_SLACK_WEBHOOK_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - name: Install ML dependencies
+        run: python -m pip install -r ml_pipeline/requirements-dev.txt
+      - name: Lint ML pipeline
+        run: python -m ruff check ml_pipeline
+      - name: Test ML pipeline
+        run: python -m pytest ml_pipeline/tests
+      - name: Run data enrichment
+        run: python ml_pipeline/enrich_data.py
+      - name: Run ML forecasting and insights
+        run: python ml_pipeline/main.py
+      - name: Persist generated data and metrics
+        # The prior nightly job committed these snapshots; retain that design and also publish an artifact.
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f ml_pipeline/data/processed/master_training_data.csv ml_pipeline/logs/performance_history.csv
+          if git diff --cached --quiet; then
+            echo "No generated data or metrics changed."
+          else
+            git commit -m "Automated ML data and metrics: $(date -u +'%Y-%m-%d')"
+            git push
+          fi
+      - name: Upload run data and forecast metrics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: forecast-metrics-${{ github.run_id }}
+          path: |
+            ml_pipeline/logs/performance_history.csv
+            ml_pipeline/data/processed/master_training_data.csv
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Notify Slack about failure or degraded run
+        if: ${{ failure() && env.SLACK_WEBHOOK_URL != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ALERT_SLACK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from urllib.request import Request, urlopen
+
+          body = json.dumps({"text": f"RetailFlow ML run failed or was degraded: {os.environ['RUN_URL']}"}).encode()
+          request = Request(os.environ["SLACK_WEBHOOK_URL"], data=body, headers={"Content-Type": "application/json"})
+          with urlopen(request, timeout=15) as response:
+              response.read()
+          PY
