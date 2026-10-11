@@ -64,7 +64,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
               color: Colors.blue.shade700,
               title: 'No insights yet',
               message:
-                  'Run python ml_pipeline/main.py to create the first AI report.',
+                  'Run the RetailFlow AI workflow in GitHub Actions to create the first AI report.',
             );
           }
 

@@ -1,15 +1,26 @@
+import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/fruit_item.dart';
 
 class HiveSalesHelper {
-  static const String _draftBoxName = 'draft_transaction_box';
-  static const String _salesBoxName = 'sales_log_box';
-  static const String _priceBoxName = 'last_price_box';
-  static const String _catalogBoxName = 'produce_catalog_box';
+  static const String _draftBoxName = 'draft_transaction_box_secure_v1';
+  static const String _salesBoxName = 'sales_log_box_secure_v1';
+  static const String _priceBoxName = 'last_price_box_secure_v1';
+  static const String _catalogBoxName = 'produce_catalog_box_secure_v1';
   static const String _draftKey = 'active_draft';
+  static const String _encryptionKeyName = 'retailflow_hive_encryption_key_v1';
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
+
+  static const Map<String, String> _legacyBoxes = <String, String>{
+    _draftBoxName: 'draft_transaction_box',
+    _salesBoxName: 'sales_log_box',
+    _priceBoxName: 'last_price_box',
+    _catalogBoxName: 'produce_catalog_box',
+  };
 
   late final Box<Map> _draftBox;
   late final Box<Map> _salesBox;
@@ -18,10 +29,70 @@ class HiveSalesHelper {
 
   Future<void> init() async {
     await Hive.initFlutter();
-    _draftBox = await Hive.openBox<Map>(_draftBoxName);
-    _salesBox = await Hive.openBox<Map>(_salesBoxName);
-    _priceBox = await Hive.openBox<Map>(_priceBoxName);
-    _catalogBox = await Hive.openBox<Map>(_catalogBoxName);
+    final cipher = HiveAesCipher(await _loadEncryptionKey());
+    await _migrateLegacyBoxes(cipher);
+    _draftBox = await Hive.openBox<Map>(_draftBoxName, encryptionCipher: cipher);
+    _salesBox = await Hive.openBox<Map>(_salesBoxName, encryptionCipher: cipher);
+    _priceBox = await Hive.openBox<Map>(_priceBoxName, encryptionCipher: cipher);
+    _catalogBox = await Hive.openBox<Map>(_catalogBoxName, encryptionCipher: cipher);
+  }
+
+  Future<List<int>> _loadEncryptionKey() async {
+    final stored = await _secureStorage.read(key: _encryptionKeyName);
+    if (stored != null) {
+      final key = base64Decode(stored);
+      if (key.length != 32) {
+        throw StateError('Stored Hive encryption key has an invalid length.');
+      }
+      return key;
+    }
+
+    final key = Hive.generateSecureKey();
+    await _secureStorage.write(key: _encryptionKeyName, value: base64Encode(key));
+    return key;
+  }
+
+  Future<void> _migrateLegacyBoxes(HiveAesCipher cipher) async {
+    for (final entry in _legacyBoxes.entries) {
+      final secureName = entry.key;
+      final legacyName = entry.value;
+      final marker = 'retailflow_migrated_$secureName';
+      if (await _secureStorage.read(key: marker) == 'true') {
+        if (await Hive.boxExists(legacyName)) {
+          await Hive.deleteBoxFromDisk(legacyName);
+        }
+        continue;
+      }
+
+      if (await Hive.boxExists(legacyName)) {
+        final legacy = await Hive.openBox<Map>(legacyName);
+        final records = Map<dynamic, dynamic>.from(legacy.toMap());
+        await legacy.close();
+
+        final encrypted = await Hive.openBox<Map>(
+          secureName,
+          encryptionCipher: cipher,
+        );
+        await encrypted.clear();
+        await encrypted.putAll(records.cast<dynamic, Map>());
+        await encrypted.flush();
+        await encrypted.close();
+      } else if (!await Hive.boxExists(secureName)) {
+        // First launch: create the encrypted box before recording migration.
+        final encrypted = await Hive.openBox<Map>(
+          secureName,
+          encryptionCipher: cipher,
+        );
+        await encrypted.close();
+      }
+
+      // Mark only after the encrypted copy is flushed. If the app stops before
+      // this point, the untouched legacy box is copied again on next launch.
+      await _secureStorage.write(key: marker, value: 'true');
+      if (await Hive.boxExists(legacyName)) {
+        await Hive.deleteBoxFromDisk(legacyName);
+      }
+    }
   }
 
   Future<void> ensureCatalogSeeded(List<FruitItem> defaultCatalog) async {
@@ -107,6 +178,9 @@ class HiveSalesHelper {
     required FruitItem fruit,
     required double quantityDelta,
   }) async {
+    if (!quantityDelta.isFinite) {
+      throw ArgumentError.value(quantityDelta, 'quantityDelta');
+    }
     final now = DateTime.now();
     final draft = _loadMutableDraft();
     final items = Map<String, dynamic>.from(
@@ -120,7 +194,7 @@ class HiveSalesHelper {
     final unitPrice = _roundCurrency(
       (existing['unitPrice'] as num?)?.toDouble() ?? getLastSoldPrice(fruit),
     );
-    final updatedQty = max(0, currentQty + quantityDelta);
+    final updatedQty = min(500.0, max(0.0, currentQty + quantityDelta));
     final lineTotal = _roundCurrency(updatedQty * unitPrice);
 
     items[fruit.id] = <String, dynamic>{
@@ -144,6 +218,9 @@ class HiveSalesHelper {
     required FruitItem fruit,
     required double unitPrice,
   }) async {
+    if (!unitPrice.isFinite || unitPrice <= 0 || unitPrice > 100000) {
+      throw ArgumentError.value(unitPrice, 'unitPrice');
+    }
     final now = DateTime.now();
     final draft = _loadMutableDraft();
     final items = Map<String, dynamic>.from(
@@ -185,6 +262,9 @@ class HiveSalesHelper {
     required double quantityKg,
     String? displayMetric,
   }) async {
+    if (!quantityKg.isFinite || quantityKg < 0 || quantityKg > 500) {
+      throw ArgumentError.value(quantityKg, 'quantityKg');
+    }
     final now = DateTime.now();
     final draft = _loadMutableDraft();
     final items = Map<String, dynamic>.from(
@@ -193,7 +273,7 @@ class HiveSalesHelper {
     final existing = Map<String, dynamic>.from(
       items[fruit.id] as Map? ?? <String, dynamic>{},
     );
-    final normalizedQty = quantityKg < 0 ? 0 : quantityKg;
+    final normalizedQty = quantityKg;
     final unitPrice = _roundCurrency(
       (existing['unitPrice'] as num?)?.toDouble() ?? getLastSoldPrice(fruit),
     );

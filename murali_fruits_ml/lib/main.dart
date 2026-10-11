@@ -21,9 +21,12 @@ Future<void> main() async {
 
   try {
     const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-    const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
-    if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
-      await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+    const supabasePublishableKey = String.fromEnvironment(
+      'SUPABASE_PUBLISHABLE_KEY',
+      defaultValue: String.fromEnvironment('SUPABASE_ANON_KEY'),
+    );
+    if (supabaseUrl.isNotEmpty && supabasePublishableKey.isNotEmpty) {
+      await Supabase.initialize(url: supabaseUrl, anonKey: supabasePublishableKey);
     }
   } catch (e) {
     debugPrint('Supabase init error: $e');
@@ -1656,15 +1659,15 @@ class _ProduceEditorSheetState extends State<_ProduceEditorSheet> {
     final name = _nameController.text.trim();
     final price = double.tryParse(_priceController.text.trim());
 
-    if (name.isEmpty) {
+    if (name.isEmpty || name.length > 60) {
       setState(() {
-        _errorText = 'Enter the item name';
+        _errorText = 'Item name must be between 1 and 60 characters';
       });
       return;
     }
-    if (price == null || price <= 0) {
+    if (price == null || !price.isFinite || price <= 0 || price > 100000) {
       setState(() {
-        _errorText = 'Enter a valid price per kg';
+        _errorText = 'Enter a price above zero and no more than Rs 100,000';
       });
       return;
     }
@@ -1758,6 +1761,7 @@ class _ProduceEditorSheetState extends State<_ProduceEditorSheet> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: _nameController,
+                  maxLength: 60,
                   textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(
                     labelText: 'Item name',
@@ -1785,7 +1789,7 @@ class _ProduceEditorSheetState extends State<_ProduceEditorSheet> {
                   ),
                   inputFormatters: <TextInputFormatter>[
                     FilteringTextInputFormatter.allow(
-                      RegExp(r'^\d{0,5}(\.\d{0,2})?$'),
+                      RegExp(r'^\d{0,6}(\.\d{0,2})?$'),
                     ),
                   ],
                   decoration: InputDecoration(
@@ -1907,9 +1911,9 @@ class _PriceEditorSheetState extends State<_PriceEditorSheet> {
 
   void _submit() {
     final parsed = double.tryParse(_controller.text.trim());
-    if (parsed == null || parsed <= 0) {
+    if (parsed == null || !parsed.isFinite || parsed <= 0 || parsed > 100000) {
       setState(() {
-        _errorText = 'Enter a valid price above zero';
+        _errorText = 'Enter a price above zero and no more than Rs 100,000';
       });
       return;
     }
@@ -2020,7 +2024,7 @@ class _PriceEditorSheetState extends State<_PriceEditorSheet> {
                   ),
                   inputFormatters: <TextInputFormatter>[
                     FilteringTextInputFormatter.allow(
-                      RegExp(r'^\d{0,5}(\.\d{0,2})?$'),
+                      RegExp(r'^\d{0,6}(\.\d{0,2})?$'),
                     ),
                   ],
                   onChanged: (_) {
@@ -2163,9 +2167,13 @@ class _WeightEditorSheetState extends State<_WeightEditorSheet> {
 
   void _submit() {
     final parsed = double.tryParse(_controller.text.trim());
-    if (parsed == null || parsed < 0) {
+    final quantityKg = parsed == null
+        ? null
+        : _convertMetricToKgValue(parsed, _selectedMetric);
+    if (parsed == null || !parsed.isFinite || parsed < 0 ||
+        quantityKg == null || !quantityKg.isFinite || quantityKg > 500) {
       setState(() {
-        _errorText = 'Enter a valid weight';
+        _errorText = 'Enter a weight between 0 and 500 kg';
       });
       return;
     }
@@ -2173,7 +2181,7 @@ class _WeightEditorSheetState extends State<_WeightEditorSheet> {
     FocusManager.instance.primaryFocus?.unfocus();
     Navigator.of(context).pop(
       _WeightEditResult(
-        quantityKg: _convertMetricToKgValue(parsed, _selectedMetric),
+        quantityKg: quantityKg,
         displayMetric: _selectedMetric,
       ),
     );
@@ -2293,7 +2301,7 @@ class _WeightEditorSheetState extends State<_WeightEditorSheet> {
                   inputFormatters: <TextInputFormatter>[
                     FilteringTextInputFormatter.allow(
                       _selectedMetric == 'g'
-                          ? RegExp(r'^\d{0,5}$')
+                          ? RegExp(r'^\d{0,6}$')
                           : RegExp(r'^\d{0,4}(\.\d{0,2})?$'),
                     ),
                   ],

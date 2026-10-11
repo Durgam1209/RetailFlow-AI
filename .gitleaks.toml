@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Firebase client configuration contains public app API identifiers, not service-account credentials."
+paths = [
+  '''murali_fruits_ml/lib/firebase_options\.dart''',
+  '''murali_fruits_ml/android/app/google-services\.json''',
+  '''public/main\.dart\.js''',
+  '''murali_fruits_ml/\.dart_tool/.*''',
+  '''murali_fruits_ml/build/.*''',
+]

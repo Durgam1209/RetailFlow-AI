@@ -17,12 +17,13 @@ class SyncRunResult {
 
 class SupabaseSyncService {
   static const String _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-  static const String _supabaseAnonKey = String.fromEnvironment(
-    'SUPABASE_ANON_KEY',
+  static const String _supabasePublishableKey = String.fromEnvironment(
+    'SUPABASE_PUBLISHABLE_KEY',
+    defaultValue: String.fromEnvironment('SUPABASE_ANON_KEY'),
   );
 
   bool get isConfigured =>
-      _supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty;
+      _supabaseUrl.isNotEmpty && _supabasePublishableKey.isNotEmpty;
 
   Future<SyncRunResult> syncPendingTransactions(
     HiveSalesHelper salesHelper,
@@ -86,9 +87,7 @@ class SupabaseSyncService {
           payload['weather_wind_speed'] = todayWeather['windSpeed'];
         }
 
-        await client
-            .from('sales_log')
-            .upsert(payload, onConflict: 'transaction_id');
+        await client.from('sales_log').insert(payload);
 
         debugPrint(
           '[SupabaseSyncService] upserted $transactionId successfully',
@@ -102,9 +101,6 @@ class SupabaseSyncService {
         debugPrint(
           '[SupabaseSyncService] upsert failed for $transactionId: '
           '${error.toString()}',
-        );
-        debugPrint(
-          '[SupabaseSyncService] payload that failed: ${payload.toString()}',
         );
         debugPrint(
           '[SupabaseSyncService] stackTrace: $stackTrace',

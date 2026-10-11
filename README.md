@@ -79,24 +79,24 @@ RetailFlowAI/
 
 ## Setup
 
-**1. Database:** run the scripts in `/sql` via the Supabase SQL Editor to create tables and views.
+**1. Database:** run `sql/supabase_sales_log.sql` and `sql/setup_daily_insights_table.sql` via the Supabase SQL Editor to create tables and views. Review and apply `sql/harden_rls.sql` after confirming that the public POS insert and aggregate view work with your project.
 
 **2. ML pipeline:**
 ```bash
 cd ml_pipeline
 python -m pip install -r requirements.txt
 ```
-Create a `.env` in `ml_pipeline/` with your Supabase project URL and an **anon/public key** (never commit or use the service role key here — it bypasses row-level security).
+Copy `ml_pipeline/.env.example` to `ml_pipeline/.env` and set the Supabase URL and publishable (or legacy anon) key. Keep the service role key only in the `SUPABASE_SERVICE_ROLE_KEY` GitHub Actions Secret used by the nightly workflow; never put it in a local `.env` or a client build. Local pipeline runs using the public key can read permitted data, but only the nightly workflow can write insights.
 
 **3. Flutter app:**
 ```bash
 cd murali_fruits_ml
-flutter run --dart-define=SUPABASE_URL="https://your-project-id.supabase.co" --dart-define=SUPABASE_ANON_KEY="your-anon-key"
+flutter run --dart-define=SUPABASE_URL="https://your-project-id.supabase.co" --dart-define=SUPABASE_PUBLISHABLE_KEY="your-publishable-key"
 ```
 
 **4. Manual deploy (optional, otherwise handled by CI):**
 ```bash
-flutter build web --release --dart-define=SUPABASE_URL="..." --dart-define=SUPABASE_ANON_KEY="..."
+flutter build web --release --dart-define=SUPABASE_URL="..." --dart-define=SUPABASE_PUBLISHABLE_KEY="..."
 firebase deploy --only hosting
 ```
 

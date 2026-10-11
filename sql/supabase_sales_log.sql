@@ -44,28 +44,30 @@ alter table public.sales_log
   enable row level security;
 
 drop policy if exists "anon can insert sales_log" on public.sales_log;
+drop policy if exists "anon can update sales_log" on public.sales_log;
+drop policy if exists "anon can select sales_log" on public.sales_log;
 create policy "anon can insert sales_log"
 on public.sales_log
 for insert
-to anon, authenticated
-with check (true);
+to anon
+with check (
+  transaction_id ~ '^TXN-[0-9]{8}-[0-9]{6}-[0-9]{4}$'
+  and total_amount >= 0
+  and item_count between 0 and 100
+  and CASE
+    WHEN jsonb_typeof(items) = 'array' THEN jsonb_array_length(items) = item_count
+    ELSE false
+  END
+  and jsonb_typeof(weather) = 'object'
+);
 
-drop policy if exists "anon can update sales_log" on public.sales_log;
-create policy "anon can update sales_log"
-on public.sales_log
-for update
-to anon, authenticated
-using (true)
-with check (true);
+revoke all on table public.sales_log from public, anon, authenticated;
+grant insert on table public.sales_log to anon;
+grant all on table public.sales_log to service_role;
 
-drop policy if exists "anon can select sales_log" on public.sales_log;
-create policy "anon can select sales_log"
-on public.sales_log
-for select
-to anon, authenticated
-using (true);
-
-create or replace view public.daily_sales_summary as
+create or replace view public.daily_sales_summary
+with (security_invoker = false)
+as
 select
   created_date,
   to_char(created_date, 'Dy') as day_of_week,

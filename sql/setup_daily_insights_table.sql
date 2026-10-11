@@ -30,13 +30,10 @@ DROP POLICY IF EXISTS "Service role can insert insights" ON public.daily_insight
 CREATE POLICY "Anyone can read daily insights"
   ON public.daily_insights
   FOR SELECT
+  TO anon
   USING (true);
 
--- Create insert policy for service role only (Python backend)
-CREATE POLICY "Service role can insert insights"
-  ON public.daily_insights
-  FOR INSERT
-  WITH CHECK (true);
+-- service_role bypasses RLS and receives INSERT explicitly below.
 
 -- Create an index on created_at for faster queries
 CREATE INDEX IF NOT EXISTS daily_insights_created_at_idx 
@@ -44,8 +41,8 @@ CREATE INDEX IF NOT EXISTS daily_insights_created_at_idx
 
 -- Grant permissions
 GRANT SELECT ON public.daily_insights TO anon;
-GRANT SELECT ON public.daily_insights TO authenticated;
-GRANT INSERT, SELECT, UPDATE ON public.daily_insights TO service_role;
+GRANT INSERT ON public.daily_insights TO service_role;
+GRANT USAGE, SELECT ON SEQUENCE public.daily_insights_id_seq TO service_role;
 
 -- Success message
 SELECT 'daily_insights table setup complete!' as status;

@@ -13,32 +13,16 @@ Follow these steps to ensure the system is working properly:
 5. Click **Run**
 
 This creates the table with proper RLS policies so:
-- Flutter app (anon key) can **READ** insights
-- Python backend (service role key) can **INSERT** insights
+- Flutter app (publishable/anon key) can **READ** insights
+- The nightly GitHub Actions job can **INSERT** insights using a service role key stored in GitHub Actions Secrets
 
 ---
 
 ### Step 2: Run the Python ML Pipeline
 
-```powershell
-cd C:\projects\RetailFlowAI
-python ml_pipeline/main.py
-```
-
-You should see:
-```
->>>..Starting RetailFLow AI Intelligence pipeline....
-....Running Market Basket Analysis....
-....Generating Demand Forecasts....
-✓ Insights successfully pushed to cloud!
-   Forecast: 7-day growth trend looks positive.
-   Bundles: X recommendations
-   Stock advice: 7 days forecasted
-Pipeline Complete. Insights are ready!!
-```
+The nightly GitHub Actions workflow runs the pipeline with the service role key from GitHub Actions Secrets. To run it manually, open the repository's **Actions** tab, select **RetailFlow AI**, and choose **Run workflow**. Local `.env` files must not contain a service role key; the publishable key cannot insert insights under RLS.
 
 ---
-
 ### Step 3: Verify Data in Supabase
 
 1. Go to Supabase Dashboard
@@ -57,7 +41,7 @@ Pipeline Complete. Insights are ready!!
 
 ```powershell
 cd C:\projects\RetailFlowAI\murali_fruits_ml
-flutter run --dart-define=SUPABASE_URL=your_supabase_url --dart-define=SUPABASE_ANON_KEY=your_supabase_anon_key
+flutter run --dart-define=SUPABASE_URL=your_supabase_url --dart-define=SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
 ```
 
 Open the **AI Insights** tab to see the recommendations.
@@ -71,7 +55,7 @@ Open the **AI Insights** tab to see the recommendations.
 **Cause:** The table exists but is empty, or the query isn't finding data.
 
 **Fix:**
-1. Run `python ml_pipeline/main.py` to generate fresh insights
+1. Trigger the **RetailFlow AI** workflow from the GitHub Actions tab
 2. Check Supabase Dashboard that rows were inserted
 3. Verify `created_at` column is recent (within last few minutes)
 
@@ -83,7 +67,7 @@ Open the **AI Insights** tab to see the recommendations.
 
 **Fix:**
 1. Check that the `--dart-define` flags are correct in your flutter run command
-2. Verify you're using the **ANON KEY** (not service role key) for Flutter
+2. Verify you're using the **publishable key** (not service role key) for Flutter
 3. Check console for error messages: Look for RLS policy denials
 
 ---
@@ -104,17 +88,15 @@ Open the **AI Insights** tab to see the recommendations.
 
 ---
 
-### **Issue: Python Script Says "RLS policy for insert"**
+### **Issue: Nightly Job Says "RLS policy for insert"**
 
 **Cause:** Service role key is missing or incorrectly configured.
 
 **Fix:**
-1. Get your **Service Role Secret** from Supabase Settings → API
-2. Add it to `ml_pipeline/.env`:
-   ```
-   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-   ```
-3. Run: `python ml_pipeline/main.py`
+1. In GitHub, open **Settings → Secrets and variables → Actions** for this repository.
+2. Add or update the `SUPABASE_SERVICE_ROLE_KEY` Actions Secret with the current service role key from Supabase.
+3. Confirm the nightly workflow maps that secret to `SUPABASE_SERVICE_ROLE_KEY` and rerun the workflow.
+4. Never put the service role key in `ml_pipeline/.env`, Flutter `--dart-define` values, or any committed file. For local development, use `ml_pipeline/.env.example`; a public key cannot write insights under the hardened policies.
 
 ---
 
@@ -180,7 +162,7 @@ When the pipeline runs successfully, this JSON is inserted:
 ## 🚀 Quick Start Checklist
 
 - [ ] SQL table created (`setup_daily_insights_table.sql`)
-- [ ] Service role key added to `ml_pipeline/.env`
+- [ ] Service role key stored in GitHub Actions Secrets for the nightly workflow only
 - [ ] Python pipeline runs successfully
 - [ ] Rows visible in Supabase `daily_insights` table
 - [ ] Flutter app displays insights without errors
