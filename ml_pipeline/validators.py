@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import math
+import pandas as pd
 from typing import Any, Dict, List, Tuple
 
 
@@ -17,6 +19,95 @@ REQUIRED_BUNDLE_KEYS = {
     "strength",
     "advice",
 }
+
+SALES_REQUIRED_COLUMNS = {"transaction_id", "created_at", "created_date", "total_amount", "item_count", "items"}
+
+
+def validate_sales_data(frame: pd.DataFrame, known_items=None, label="sales_log") -> tuple[pd.DataFrame, int]:
+    """Validate, deduplicate and remove return/void lines from transaction demand."""
+    missing = sorted(SALES_REQUIRED_COLUMNS - set(frame.columns))
+    if missing:
+        raise ValueError(f"{label} is missing required columns: {', '.join(missing)}")
+    data = frame.copy()
+    if data["transaction_id"].isna().any() or data["transaction_id"].astype(str).str.strip().eq("").any():
+        raise ValueError(f"{label} contains a null or blank transaction_id")
+    data["transaction_id"] = data["transaction_id"].astype(str)
+    duplicates = int(data.duplicated("transaction_id", keep="first").sum())
+    if duplicates:
+        print(f"Validation: removed {duplicates} duplicate transaction row(s) by transaction_id")
+        data = data.drop_duplicates("transaction_id", keep="first").copy()
+
+    parsed_dates = pd.to_datetime(data["created_date"], errors="coerce", utc=True)
+    if parsed_dates.isna().any():
+        rows = data.index[parsed_dates.isna()].tolist()[:5]
+        raise ValueError(f"{label} has invalid created_date values at row(s): {rows}")
+    data["created_date"] = parsed_dates.dt.tz_convert(None).dt.normalize()
+    parsed_timestamps = pd.to_datetime(data["created_at"], errors="coerce", utc=True)
+    if parsed_timestamps.isna().any():
+        rows = data.index[parsed_timestamps.isna()].tolist()[:5]
+        raise ValueError(f"{label} has invalid created_at timestamps at row(s): {rows}")
+    data["created_at"] = parsed_timestamps
+    for column in ("total_amount", "item_count"):
+        values = pd.to_numeric(data[column], errors="coerce")
+        invalid = values.isna() | ~values.map(lambda x: math.isfinite(float(x)))
+        if invalid.any():
+            raise ValueError(f"{label}.{column} contains non-numeric or non-finite values")
+        if column == "item_count" and (values < 0).any():
+            raise ValueError(f"{label}.{column} contains negative values")
+        data[column] = values
+    return_line_count = 0
+    negative_total = data["total_amount"] < 0
+    if negative_total.any():
+        return_line_count += int(negative_total.sum())
+        data = data.loc[~negative_total].copy()
+
+    known_items = set(known_items or [])
+    clean_items = []
+    clean_counts = []
+    for row_index, value in data["items"].items():
+        items = value
+        if isinstance(items, str):
+            try:
+                items = json.loads(items)
+            except (ValueError, TypeError):
+                try:
+                    import ast
+                    items = ast.literal_eval(items)
+                except (ValueError, SyntaxError):
+                    raise ValueError(f"{label}.items is malformed at row {row_index}")
+        if not isinstance(items, list):
+            raise ValueError(f"{label}.items must be a list at row {row_index}")
+        if len(items) != int(data.at[row_index, "item_count"]):
+            raise ValueError(f"{label}.item_count does not match items length at row {row_index}")
+        remaining = []
+        for item in items:
+            if not isinstance(item, dict):
+                raise ValueError(f"{label}.items contains a non-object at row {row_index}")
+            name = item.get("fruitName") or item.get("fruit_name") or item.get("name")
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError(f"{label}.items has a blank item name at row {row_index}")
+            if known_items and name not in known_items:
+                raise ValueError(f"{label} contains unknown item name {name!r} at row {row_index}")
+            try:
+                if "quantityKg" not in item or "unitPrice" not in item:
+                    raise ValueError("required quantityKg/unitPrice missing")
+                quantity = float(item["quantityKg"])
+                price = float(item["unitPrice"])
+            except (TypeError, ValueError):
+                raise ValueError(f"{label}.items has invalid quantity/price at row {row_index}")
+            if not math.isfinite(quantity) or not math.isfinite(price):
+                raise ValueError(f"{label}.items has non-finite quantity/price at row {row_index}")
+            if quantity < 0 or price < 0:
+                return_line_count += 1
+                continue
+            remaining.append(item)
+        clean_items.append(remaining)
+        clean_counts.append(len(remaining))
+    data["items"] = clean_items
+    data["item_count"] = clean_counts
+    if return_line_count:
+        print(f"Validation: excluded {return_line_count} negative return/void item line(s) from demand")
+    return data, return_line_count
 
 
 def _is_number(x: Any) -> bool:

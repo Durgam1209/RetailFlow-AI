@@ -52,3 +52,4 @@ build/
 *.log
 *.tmp
 *.temp
+ml_pipeline/logs/weather_cache.json

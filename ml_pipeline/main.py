@@ -301,35 +301,48 @@ def fetch_tomorrow_weather(
     latitude=12.9916,
     longitude=77.6926,
 ):
-    if not os.getenv("WEATHER_KEY"):
-        return {}
+    cache_path = SCRIPT_DIR / "logs" / "weather_cache.json"
+    api_key = os.getenv("WEATHER_KEY")
+    if not api_key:
+        print("WARNING: WEATHER_KEY is not configured; continuing without weather features.")
+        return _load_weather_cache(cache_path)
 
     tomorrow = date.today() + timedelta(days=1)
-    try:
-        response = httpx.get(
-            "https://api.openweathermap.org/data/2.5/forecast",
-            params={
-                "lat": latitude,
-                "lon": longitude,
-                "units": "metric",
-                "appid": os.getenv("WEATHER_KEY"),
-            },
-            timeout=20.0,
-        )
-        response.raise_for_status()
-        forecasts = response.json().get("list", [])
-    except Exception as error:
-        print(f"Weather forecast fetch failed: {error}")
-        return {}
+    forecasts = None
+    for attempt in range(3):
+        try:
+            response = httpx.get(
+                "https://api.openweathermap.org/data/2.5/forecast",
+                params={"lat": latitude, "lon": longitude, "units": "metric", "appid": api_key},
+                timeout=httpx.Timeout(10.0, connect=5.0),
+            )
+            response.raise_for_status()
+            payload = response.json()
+            forecasts = payload.get("list", []) if isinstance(payload, dict) else None
+            if not isinstance(forecasts, list):
+                raise ValueError("unexpected forecast response shape")
+            break
+        except (httpx.HTTPError, ValueError) as error:
+            print(f"WARNING: OpenWeather attempt {attempt + 1}/3 failed ({type(error).__name__}).")
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    if forecasts is None:
+        print("WARNING: OpenWeather unavailable; continuing with holiday-only context.")
+        return _load_weather_cache(cache_path)
 
-    tomorrow_rows = []
-    for item in forecasts:
-        forecast_time = datetime.fromtimestamp(item.get("dt", 0))
-        if forecast_time.date() == tomorrow:
-            tomorrow_rows.append(item)
+    try:
+        tomorrow_rows = []
+        for item in forecasts:
+            forecast_time = datetime.fromtimestamp(item.get("dt", 0))
+            if forecast_time.date() == tomorrow:
+                tomorrow_rows.append(item)
+    except (AttributeError, TypeError, ValueError, OverflowError, OSError):
+        print("WARNING: OpenWeather returned malformed forecast data; using cache if available.")
+        return _load_weather_cache(cache_path)
 
     if not tomorrow_rows:
-        return {}
+        print("WARNING: OpenWeather returned no forecast for tomorrow; using cached weather if available.")
+        return _load_weather_cache(cache_path)
 
     selected = min(
         tomorrow_rows,
@@ -346,7 +359,7 @@ def fetch_tomorrow_weather(
     tomorrow_min = min(tomorrow_temps) if tomorrow_temps else _safe_float(main.get("temp"))
     tomorrow_max = max(tomorrow_temps) if tomorrow_temps else _safe_float(main.get("temp"))
 
-    return {
+    weather = {
         "date": tomorrow.isoformat(),
         "city": city_name,
         "condition": weather.get("main", "Unknown"),
@@ -358,6 +371,21 @@ def fetch_tomorrow_weather(
         "wind_speed": round(_safe_float(wind.get("speed")), 1),
         "rain_probability": round(_safe_float(selected.get("pop")), 2),
     }
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(weather), encoding="utf-8")
+    except OSError:
+        print("WARNING: Weather response is usable, but its cache could not be written.")
+    return weather
+
+
+def _load_weather_cache(cache_path):
+    try:
+        cached = json.loads(cache_path.read_text(encoding="utf-8"))
+        print(f"WARNING: Using last good weather response dated {cached.get('date', 'unknown')}.")
+        return cached
+    except (OSError, ValueError, TypeError):
+        return {}
 
 
 def _weather_fruit_names(weather):
@@ -479,6 +507,20 @@ def fetch_and_prepare_data():
     
     enriched_df = pd.read_csv(csv_path)
     print(f"Loaded {len(enriched_df)} training records from CSV")
+    from validators import validate_sales_data
+
+    known_items = set(DEFAULT_FRUIT_PRICES)
+    # The enriched export is the local item catalog snapshot and includes configured/custom fruit names.
+    if "items" in enriched_df:
+        for values in enriched_df["items"].apply(_parse_items):
+            for item in values if isinstance(values, list) else []:
+                name = _item_name(item)
+                if name:
+                    known_items.add(str(name))
+    if not known_items:
+        raise ValueError("Input validation failed: no known item names found in sales data")
+    df, _ = validate_sales_data(df, known_items, "Supabase sales_log")
+    enriched_df, _ = validate_sales_data(enriched_df, known_items, "enriched training data")
     return df, enriched_df
 
 def format_basket_rules(rules_df):
@@ -754,14 +796,24 @@ def log_performance(metrics):
     log_path = SCRIPT_DIR / "logs" / "performance_history.csv"
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
+    previous = pd.read_csv(log_path) if log_path.exists() and log_path.stat().st_size else pd.DataFrame()
+    if not previous.empty and metrics.get("mae_kg") is not None:
+        trailing = pd.to_numeric(previous.get("mae_kg"), errors="coerce").dropna().tail(7)
+        current_mae = _safe_float(metrics.get("mae_kg"), -1)
+        trailing_mean = float(trailing.mean()) if len(trailing) else None
+        regression = trailing_mean is not None and len(trailing) >= 3 and current_mae > trailing_mean * 1.25
+        metrics["mae_kg_trailing_7_run_avg"] = round(trailing_mean, 3) if trailing_mean is not None else None
+        metrics["regression_alert"] = bool(regression)
+        if regression:
+            print(f"FORECAST REGRESSION: MAE {current_mae:.3f} kg exceeds trailing 7-run average "
+                  f"{trailing_mean:.3f} kg by more than 25%.")
+
     log_entry = pd.DataFrame([{
         "timestamp": datetime.now().isoformat(),
         **metrics
     }])
 
-    # Write header only if file is new or empty
-    file_is_new = not log_path.exists() or log_path.stat().st_size == 0
-    log_entry.to_csv(log_path, mode='a', header=file_is_new, index=False)
+    pd.concat([previous, log_entry], ignore_index=True, sort=False).to_csv(log_path, index=False)
 
 def main():
 
@@ -835,13 +887,30 @@ def main():
             "weekly_revenue_estimate": sum(
                 day.get("expected_revenue", 0) for day in stock_advice
             ),
-            # ✅ Spread forecast metrics in — handles the "not enough data" string gracefully
-            **(forecast_metrics if isinstance(forecast_metrics, dict) else {
-                "mae": None,
-                "accuracy_score": None,
-                "sample_size": 0,
-            }),
+            "item_metrics": json.dumps(forecast_metrics.get("item_metrics", {}), sort_keys=True),
+            "evaluation_days": forecast_metrics.get("evaluation_days"),
+            "metric_unit": forecast_metrics.get("metric_unit", "kg per item"),
         }
+        item_metrics = forecast_metrics.get("item_metrics", {})
+        item_scores = [item["prophet"] for item in item_metrics.values() if "prophet" in item]
+        baseline_scores = [item["baseline"] for item in item_metrics.values()]
+        if item_scores:
+            metrics["mae_kg"] = round(sum(item["mae_kg"] for item in item_scores) / len(item_scores), 3)
+            metrics["mse_kg2"] = round(sum(item["mse_kg2"] for item in item_scores) / len(item_scores), 3)
+            metrics["rmse_kg"] = round(sum(item["rmse_kg"] for item in item_scores) / len(item_scores), 3)
+            total_actual = sum(item["actual_kg"] for item in item_scores)
+            metrics["wape_pct"] = round(100 * sum(item["absolute_error_kg"] for item in item_scores)
+                                        / total_actual, 2) if total_actual else None
+            metrics["bias_kg"] = round(sum(item["bias_kg"] for item in item_scores) / len(item_scores), 3)
+        else:
+            metrics.update({"mae_kg": None, "mse_kg2": None, "rmse_kg": None,
+                            "wape_pct": None, "bias_kg": None})
+        metrics["baseline_mse_kg2"] = round(sum(item["mse_kg2"] for item in baseline_scores) / len(
+            baseline_scores), 3) if baseline_scores else None
+        metrics["baseline_mae_kg"] = round(sum(item["mae_kg"] for item in baseline_scores) / len(
+            baseline_scores), 3) if baseline_scores else None
+        metrics["baseline_rmse_kg"] = round(sum(item["rmse_kg"] for item in baseline_scores) / len(
+            baseline_scores), 3) if baseline_scores else None
         log_performance(metrics)
         print("Performance log updated.")
 
