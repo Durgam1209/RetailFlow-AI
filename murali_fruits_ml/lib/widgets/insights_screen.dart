@@ -69,10 +69,20 @@ class _InsightsScreenState extends State<InsightsScreen> {
           }
 
           final data = snapshot.data!;
-          final bundles = _decodeList(data['suggested_bundles']);
-          final forecasts = _decodeList(data['stock_advice']);
-          final festivalAdvice = _decodeMap(data['festival_advice']);
-          final weatherAdvice = _decodeMap(data['weather_advice']);
+          final schemaVersion = data['schema_version'];
+          if (schemaVersion == null) {
+            debugPrint(
+              'WARNING: daily_insights is missing schema_version; reading it as a legacy record.',
+            );
+          } else if (schemaVersion != '1.0') {
+            debugPrint(
+              'WARNING: Unsupported daily_insights schema_version "$schemaVersion".',
+            );
+          }
+          final bundles = _decodeList(data, 'suggested_bundles');
+          final forecasts = _decodeList(data, 'stock_advice');
+          final festivalAdvice = _decodeMap(data, 'festival_advice');
+          final weatherAdvice = _decodeMap(data, 'weather_advice');
           final visibleWeatherAdvice = weatherAdvice.isNotEmpty
               ? weatherAdvice
               : _weatherAdviceFromForecasts(forecasts);
@@ -81,8 +91,17 @@ class _InsightsScreenState extends State<InsightsScreen> {
             bundles: bundles,
             festivalAdvice: festivalAdvice,
           );
-          final summary =
-              data['forecast_summary'] as String? ?? 'Demand is steady.';
+          final summary = data['forecast_summary'] as String? ?? 'Demand is steady.';
+          if (data['forecast_summary'] == null) {
+            debugPrint(
+              'WARNING: daily_insights is missing forecast_summary; using the UI fallback.',
+            );
+          }
+          if (data['created_at'] == null) {
+            debugPrint(
+              'WARNING: daily_insights is missing created_at; the update time may be blank.',
+            );
+          }
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -155,22 +174,25 @@ class _InsightsScreenState extends State<InsightsScreen> {
     );
   }
 
-  List<dynamic> _decodeList(dynamic value) {
+  List<dynamic> _decodeList(Map<String, dynamic> data, String field) {
+    final value = data[field];
     try {
       if (value is String && value.trim().isNotEmpty) {
         final decoded = jsonDecode(value);
-        return decoded is List ? decoded : <dynamic>[];
+        if (decoded is List) return decoded;
       }
       if (value is List) {
         return value;
       }
     } catch (_) {
-      return <dynamic>[];
+      // Warn below and use an empty collection for older or malformed rows.
     }
+    debugPrint('WARNING: daily_insights.$field is missing or invalid; using an empty list.');
     return <dynamic>[];
   }
 
-  Map<String, dynamic> _decodeMap(dynamic value) {
+  Map<String, dynamic> _decodeMap(Map<String, dynamic> data, String field) {
+    final value = data[field];
     try {
       if (value is String && value.trim().isNotEmpty) {
         final decoded = jsonDecode(value);
@@ -183,8 +205,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
         return Map<String, dynamic>.from(value);
       }
     } catch (_) {
-      return <String, dynamic>{};
+      // Warn below and use an empty map for older or malformed rows.
     }
+    debugPrint('WARNING: daily_insights.$field is missing or invalid; using an empty object.');
     return <String, dynamic>{};
   }
 

@@ -5,6 +5,7 @@
 -- Create the daily_insights table if it doesn't exist
 CREATE TABLE IF NOT EXISTS public.daily_insights (
   id BIGSERIAL PRIMARY KEY,
+  schema_version TEXT NOT NULL DEFAULT '1.0',
   forecast_summary TEXT NOT NULL,
   suggested_bundles JSONB NOT NULL DEFAULT '[]'::jsonb,
   stock_advice JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -14,8 +15,9 @@ CREATE TABLE IF NOT EXISTS public.daily_insights (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Add the festival advice column for existing installations
+-- Add versioned insight fields for existing installations
 ALTER TABLE public.daily_insights
+  ADD COLUMN IF NOT EXISTS schema_version TEXT NOT NULL DEFAULT '1.0',
   ADD COLUMN IF NOT EXISTS festival_advice JSONB NOT NULL DEFAULT '{}'::jsonb,
   ADD COLUMN IF NOT EXISTS weather_advice JSONB NOT NULL DEFAULT '{}'::jsonb;
 

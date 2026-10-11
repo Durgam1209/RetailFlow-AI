@@ -1,24 +1,72 @@
-import pandas as pd
-from supabase import create_client
 import ast
 import json
+import logging
 import os
-import dotenv
-from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
-import holidays
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
+from typing import Any
+
+import dotenv
+import holidays
 import httpx
+import pandas as pd
+from config import (
+    BUNDLE_ANTECEDENT_PRIOR_COUNT,
+    BUNDLE_CONFIDENCE_CAP_PERCENT,
+    BUNDLE_CONFIDENCE_PRIOR_COUNT,
+    BUNDLE_GOOD_CONFIDENCE,
+    BUNDLE_STRONG_CONFIDENCE,
+    CONFIDENCE_HIGH_SPREAD,
+    CONFIDENCE_MEDIUM_SPREAD,
+    DEFAULT_FESTIVAL_FRUITS,
+    DEFAULT_FRUIT_PRICES,
+    DEFAULT_UNIT_PRICE,
+    DEFAULT_WEATHER_CITY,
+    DEFAULT_WEATHER_LATITUDE,
+    DEFAULT_WEATHER_LONGITUDE,
+    FESTIVAL_DEMAND_MULTIPLIER,
+    FESTIVAL_FRUIT_MAP,
+    FESTIVAL_MINIMUM_EXTRA_KG,
+    FORECAST_HORIZON_DAYS,
+    INSIGHTS_SCHEMA_VERSION,
+    MAX_ACTION_FRUIT_NAMES,
+    MAX_FESTIVAL_RECOMMENDATIONS,
+    MAX_RECOMMENDED_FRUITS,
+    MAX_STOCK_ADVICE_ITEMS,
+    METRIC_REGRESSION_THRESHOLD,
+    PERFORMANCE_MIN_REGRESSION_RUNS,
+    PERFORMANCE_TRAILING_RUNS,
+    RECENT_SALES_DAYS,
+    RETRY_INITIAL_DELAY_SECONDS,
+    SUPABASE_MAX_RETRIES,
+    SUPABASE_TIMEOUT_SECONDS,
+    WEATHER_CACHE_FILENAME,
+    WEATHER_COLD_THRESHOLD_C,
+    WEATHER_CONNECT_TIMEOUT_SECONDS,
+    WEATHER_HOT_THRESHOLD_C,
+    WEATHER_HUMIDITY_THRESHOLD,
+    WEATHER_MAX_RETRIES,
+    WEATHER_PICK_QUANTITY_KG,
+    WEATHER_RAIN_PROBABILITY_THRESHOLD,
+    WEATHER_TIMEOUT_SECONDS,
+    WHOLE_KG_LABEL_THRESHOLD,
+    configure_logging,
+)
 from models.basket_analyzer import run_basket_analysis
 from models.demand_forecaster import run_demand_forecasting
-from validators import validate_and_standardize_payload
-
+from supabase import create_client
+from validators import validate_and_standardize_payload, validate_daily_insights_payload
 
 # Load environment variables from .env
 dotenv.load_dotenv()
 
 # Get the directory where this script is located
 SCRIPT_DIR = Path(__file__).parent
+LOGGER = logging.getLogger(__name__)
+
 
 def _require_env(name):
     value = os.getenv(name)
@@ -36,83 +84,49 @@ KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or _require_env("SUPABASE_KEY")
 
 # Configure HTTP client with proper timeout and SSL settings
 http_client = httpx.Client(
-    timeout=60.0,
+    timeout=SUPABASE_TIMEOUT_SECONDS,
     verify=True,
 )
 
 supabase = create_client(URL, KEY)
 
-FESTIVAL_FRUIT_MAP = {
-    "diwali": ["Apple Washington", "Apple Poland", "Pomegranate", "Banana"],
-    "deepavali": ["Apple Washington", "Apple Poland", "Pomegranate", "Banana"],
-    "ganesh": ["Banana", "Apple Washington", "Pomegranate"],
-    "vinayaka": ["Banana", "Apple Washington", "Pomegranate"],
-    "makar sankranti": ["Banana", "Orange Citrus", "Pomegranate"],
-    "pongal": ["Banana", "Orange Citrus", "Pomegranate"],
-    "holi": ["Watermelon", "Orange Citrus", "Green Grapes"],
-    "dussehra": ["Banana", "Apple Washington", "Pomegranate"],
-    "dasara": ["Banana", "Apple Washington", "Pomegranate"],
-    "eid": ["Apple Washington", "Pomegranate", "Green Grapes"],
-    "ram navami": ["Banana", "Orange Citrus", "Apple Poland"],
-    "janmashtami": ["Banana", "Apple Washington", "Pomegranate"],
-    "raksha bandhan": ["Apple Washington", "Pomegranate", "Seedless Green Grapes"],
-    "onam": ["Banana", "Pomegranate", "Orange Citrus"],
-    "ugadi": ["Banana", "Orange Citrus", "Apple Poland"],
-    "christmas": ["Apple Washington", "Green Grapes", "Pomegranate"],
-    "republic day": ["Orange Citrus", "Banana", "Apple Washington"],
-    "independence day": ["Orange Citrus", "Banana", "Apple Washington"],
-}
 
-DEFAULT_FESTIVAL_FRUITS = ["Banana", "Apple Washington", "Pomegranate"]
-
-DEFAULT_FRUIT_PRICES = {
-    "Apple Poland": 220,
-    "Apple Washington": 180,
-    "Banana": 60,
-    "Yelakki Banana": 90,
-    "Papaya": 50,
-    "Orange Citrus": 120,
-    "Mandarin Orange": 140,
-    "Nagpur Orange": 130,
-    "Musambi": 80,
-    "Green Grapes": 90,
-    "Seedless Green Grapes": 110,
-    "Black Grapes": 100,
-    "Seedless Black Grapes": 120,
-    "Pomegranate": 160,
-    "Watermelon": 35,
-    "Watermelon Kiran": 45,
-}
-
-
-def _retry_with_backoff(func, max_retries=5, initial_delay=2):
+def _retry_with_backoff(
+    func: Callable[[], Any],
+    max_retries=SUPABASE_MAX_RETRIES,
+    initial_delay=RETRY_INITIAL_DELAY_SECONDS,
+):
     """Retry a function with exponential backoff, optimized for connection timeouts"""
     import httpcore
     from httpx import ConnectTimeout
-    
+
     for attempt in range(max_retries):
         try:
             return func()
-        except (ConnectTimeout, httpcore.ConnectTimeout, TimeoutError) as e:
+        except (ConnectTimeout, httpcore.ConnectTimeout, TimeoutError):
             # Connection timeout - worth retrying with longer delays
             if attempt == max_retries - 1:
-                print(f"Failed after {max_retries} attempts. Connection timeouts may indicate:")
-                print("  - Supabase service is down or overloaded")
-                print("  - Network connectivity issue")
-                print("  - Firewall or proxy blocking the connection")
-                print("  - DNS resolution issues")
+                LOGGER.error("Supabase request exhausted its timeout retries")
                 raise
-            delay = initial_delay * (2 ** attempt)
-            print(f"Attempt {attempt + 1} failed with timeout: {type(e).__name__}")
-            print(f"Retrying in {delay} seconds...")
+            delay = initial_delay * (2**attempt)
+            LOGGER.warning(
+                "Supabase request timed out; retrying",
+                extra={"attempt": attempt + 1, "delay_seconds": delay},
+            )
             time.sleep(delay)
         except Exception as e:
             # Other exceptions - only retry a couple times
             if attempt >= max_retries - 2:
                 raise
-            delay = initial_delay * (2 ** attempt)
-            print(f"Attempt {attempt + 1} failed: {str(e)}")
-            print(f"Retrying in {delay} seconds...")
+            delay = initial_delay * (2**attempt)
+            LOGGER.warning(
+                "Supabase request failed; retrying",
+                extra={
+                    "attempt": attempt + 1,
+                    "delay_seconds": delay,
+                    "error_type": type(e).__name__,
+                },
+            )
             time.sleep(delay)
 
 
@@ -124,7 +138,7 @@ def _safe_float(value, fallback=0.0):
 
 
 def _display_date(value):
-    date = pd.to_datetime(value, errors='coerce')
+    date = pd.to_datetime(value, errors="coerce")
     if pd.isna(date):
         return str(value)
     return f"{date:%a}, {date:%b} {date.day}"
@@ -134,17 +148,17 @@ def _confidence_label(predicted, lower, upper):
     if predicted <= 0:
         return "Learning"
     spread = (upper - lower) / predicted
-    if spread <= 0.35:
+    if spread <= CONFIDENCE_HIGH_SPREAD:
         return "High confidence"
-    if spread <= 0.65:
+    if spread <= CONFIDENCE_MEDIUM_SPREAD:
         return "Medium confidence"
     return "Early signal"
 
 
 def _bundle_strength(confidence):
-    if confidence >= 0.7:
+    if confidence >= BUNDLE_STRONG_CONFIDENCE:
         return "Strong pairing"
-    if confidence >= 0.45:
+    if confidence >= BUNDLE_GOOD_CONFIDENCE:
         return "Good pairing"
     return "Worth testing"
 
@@ -174,15 +188,13 @@ def _format_rupees(value):
 
 
 def _format_kg(value):
-    return f"{value:.0f} kg" if value >= 10 else f"{value:.1f} kg"
+    return f"{value:.0f} kg" if value >= WHOLE_KG_LABEL_THRESHOLD else f"{value:.1f} kg"
 
 
 def _item_sales_frame(df):
     rows = []
     if df.empty or "created_date" not in df.columns or "items" not in df.columns:
-        return pd.DataFrame(
-            columns=["date", "fruit_name", "quantity_kg", "revenue", "unit_price"]
-        )
+        return pd.DataFrame(columns=["date", "fruit_name", "quantity_kg", "revenue", "unit_price"])
 
     for _, sale in df.iterrows():
         sale_date = pd.to_datetime(sale.get("created_date"), errors="coerce")
@@ -238,7 +250,10 @@ def _historical_festival_fruits(df, festival_name, in_holidays):
         lambda day: in_holidays.get(day) if day in in_holidays else None
     )
     festival_rows = rows[
-        rows["holiday_name"].fillna("").str.lower().str.contains(
+        rows["holiday_name"]
+        .fillna("")
+        .str.lower()
+        .str.contains(
             festival_name.lower(),
             regex=False,
         )
@@ -262,11 +277,11 @@ def _historical_festival_fruits(df, festival_name, in_holidays):
             item_counts.items(),
             key=lambda entry: entry[1],
             reverse=True,
-        )[:3]
+        )[:MAX_FESTIVAL_RECOMMENDATIONS]
     ]
 
 
-def get_festival_advice(df, today=None):
+def get_festival_advice(df: pd.DataFrame, today: date | None = None) -> dict:
     """Build a high-priority action banner when tomorrow is an Indian holiday."""
     today = today or date.today()
     tomorrow = today + timedelta(days=1)
@@ -281,7 +296,7 @@ def get_festival_advice(df, today=None):
     festival_name = in_holidays.get(tomorrow)
     historical_fruits = _historical_festival_fruits(df, festival_name, in_holidays)
     recommended_fruits = historical_fruits or _festival_mapping(festival_name)
-    fruit_text = ", ".join(recommended_fruits[:3])
+    fruit_text = ", ".join(recommended_fruits[:MAX_FESTIVAL_RECOMMENDATIONS])
 
     return {
         "is_active": True,
@@ -291,30 +306,33 @@ def get_festival_advice(df, today=None):
         "title": f"Tomorrow is {festival_name}",
         "action": f"Stock up on {fruit_text} today.",
         "merchandising": "Place these fruits at the front of the shop for faster pickup.",
-        "recommended_fruits": recommended_fruits[:3],
+        "recommended_fruits": recommended_fruits[:MAX_FESTIVAL_RECOMMENDATIONS],
         "basis": "Historical festival sales" if historical_fruits else "Festival rule mapping",
     }
 
 
 def fetch_tomorrow_weather(
-    city_name="Mahadevapura, Bengaluru",
-    latitude=12.9916,
-    longitude=77.6926,
-):
-    cache_path = SCRIPT_DIR / "logs" / "weather_cache.json"
+    city_name: str = DEFAULT_WEATHER_CITY,
+    latitude: float = DEFAULT_WEATHER_LATITUDE,
+    longitude: float = DEFAULT_WEATHER_LONGITUDE,
+) -> dict:
+    """Fetch tomorrow's forecast with bounded retries and a last-good cache fallback."""
+    cache_path = SCRIPT_DIR / "logs" / WEATHER_CACHE_FILENAME
     api_key = os.getenv("WEATHER_KEY")
     if not api_key:
-        print("WARNING: WEATHER_KEY is not configured; continuing without weather features.")
+        LOGGER.warning("WEATHER_KEY is not configured; continuing without weather features")
         return _load_weather_cache(cache_path)
 
     tomorrow = date.today() + timedelta(days=1)
     forecasts = None
-    for attempt in range(3):
+    for attempt in range(WEATHER_MAX_RETRIES):
         try:
             response = httpx.get(
                 "https://api.openweathermap.org/data/2.5/forecast",
                 params={"lat": latitude, "lon": longitude, "units": "metric", "appid": api_key},
-                timeout=httpx.Timeout(10.0, connect=5.0),
+                timeout=httpx.Timeout(
+                    WEATHER_TIMEOUT_SECONDS, connect=WEATHER_CONNECT_TIMEOUT_SECONDS
+                ),
             )
             response.raise_for_status()
             payload = response.json()
@@ -323,11 +341,14 @@ def fetch_tomorrow_weather(
                 raise ValueError("unexpected forecast response shape")
             break
         except (httpx.HTTPError, ValueError) as error:
-            print(f"WARNING: OpenWeather attempt {attempt + 1}/3 failed ({type(error).__name__}).")
-            if attempt < 2:
-                time.sleep(2 ** attempt)
+            LOGGER.warning(
+                "OpenWeather request failed",
+                extra={"attempt": attempt + 1, "error_type": type(error).__name__},
+            )
+            if attempt < WEATHER_MAX_RETRIES - 1:
+                time.sleep(2**attempt)
     if forecasts is None:
-        print("WARNING: OpenWeather unavailable; continuing with holiday-only context.")
+        LOGGER.warning("OpenWeather unavailable; continuing with holiday-only context")
         return _load_weather_cache(cache_path)
 
     try:
@@ -337,11 +358,13 @@ def fetch_tomorrow_weather(
             if forecast_time.date() == tomorrow:
                 tomorrow_rows.append(item)
     except (AttributeError, TypeError, ValueError, OverflowError, OSError):
-        print("WARNING: OpenWeather returned malformed forecast data; using cache if available.")
+        LOGGER.warning("OpenWeather returned malformed forecast data; using cache if available")
         return _load_weather_cache(cache_path)
 
     if not tomorrow_rows:
-        print("WARNING: OpenWeather returned no forecast for tomorrow; using cached weather if available.")
+        LOGGER.warning(
+            "OpenWeather returned no forecast for tomorrow; using cached weather if available"
+        )
         return _load_weather_cache(cache_path)
 
     selected = min(
@@ -375,14 +398,16 @@ def fetch_tomorrow_weather(
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(json.dumps(weather), encoding="utf-8")
     except OSError:
-        print("WARNING: Weather response is usable, but its cache could not be written.")
+        LOGGER.warning("Weather response is usable, but its cache could not be written")
     return weather
 
 
 def _load_weather_cache(cache_path):
     try:
         cached = json.loads(cache_path.read_text(encoding="utf-8"))
-        print(f"WARNING: Using last good weather response dated {cached.get('date', 'unknown')}.")
+        LOGGER.warning(
+            "Using last good weather response", extra={"date": cached.get("date", "unknown")}
+        )
         return cached
     except (OSError, ValueError, TypeError):
         return {}
@@ -398,13 +423,13 @@ def _weather_fruit_names(weather):
     rain_probability = _safe_float(weather.get("rain_probability"))
     fruits = []
 
-    if temperature >= 30:
+    if temperature >= WEATHER_HOT_THRESHOLD_C:
         fruits.extend(["Watermelon", "Watermelon Kiran", "Orange Citrus", "Musambi", "Papaya"])
-    if temperature <= 18:
+    if temperature <= WEATHER_COLD_THRESHOLD_C:
         fruits.extend(["Banana", "Apple Washington", "Apple Poland", "Pomegranate"])
-    if "rain" in condition or rain_probability >= 0.5:
+    if "rain" in condition or rain_probability >= WEATHER_RAIN_PROBABILITY_THRESHOLD:
         fruits.extend(["Banana", "Pomegranate", "Apple Washington", "Green Grapes"])
-    if humidity >= 70:
+    if humidity >= WEATHER_HUMIDITY_THRESHOLD:
         fruits.extend(["Orange Citrus", "Musambi", "Papaya"])
 
     return list(dict.fromkeys(fruits))
@@ -430,8 +455,8 @@ def _apply_weather_adjustment(stock_advice, weather):
             for fruit_name in recommended:
                 if fruit_name in known:
                     continue
-                unit_price = DEFAULT_FRUIT_PRICES.get(fruit_name, 100)
-                quantity_kg = 2.0
+                unit_price = DEFAULT_FRUIT_PRICES.get(fruit_name, DEFAULT_UNIT_PRICE)
+                quantity_kg = WEATHER_PICK_QUANTITY_KG
                 top_fruits.append(
                     {
                         "fruit_name": fruit_name,
@@ -445,15 +470,20 @@ def _apply_weather_adjustment(stock_advice, weather):
 
             top_fruits = sorted(
                 top_fruits,
-                key=lambda item: (item.get("is_weather_pick") is True, item.get("expected_revenue", 0)),
+                key=lambda item: (
+                    item.get("is_weather_pick") is True,
+                    item.get("expected_revenue", 0),
+                ),
                 reverse=True,
-            )[:5]
+            )[:MAX_STOCK_ADVICE_ITEMS]
             total_revenue = sum(item.get("expected_revenue", 0) for item in top_fruits)
             total_kg = sum(item.get("suggested_kg", 0) for item in top_fruits)
             updated_day["top_fruits"] = top_fruits
             updated_day["expected_revenue"] = round(total_revenue)
             updated_day["revenue_label"] = f"Expected revenue: {_format_rupees(total_revenue)}"
-            updated_day["stock_label"] = f"Top stock target: {_format_kg(total_kg)} across {len(top_fruits)} fruits"
+            updated_day["stock_label"] = (
+                f"Top stock target: {_format_kg(total_kg)} across {len(top_fruits)} fruits"
+            )
             updated_day["weather_condition"] = weather.get("condition")
             updated_day["weather_min_temperature"] = weather.get("min_temperature")
             updated_day["weather_max_temperature"] = weather.get("max_temperature")
@@ -461,7 +491,7 @@ def _apply_weather_adjustment(stock_advice, weather):
             updated_day["weather_adjustment"] = (
                 f"Tomorrow weather: {weather.get('condition')} "
                 f"{weather.get('min_temperature')} - {weather.get('max_temperature')} C. Boost "
-                + ", ".join(recommended[:3])
+                + ", ".join(recommended[:MAX_ACTION_FRUIT_NAMES])
                 + "."
             )
         updated_advice.append(updated_day)
@@ -472,45 +502,39 @@ def _apply_weather_adjustment(stock_advice, weather):
         "action": (
             f"Tomorrow range: {weather.get('min_temperature')} - "
             f"{weather.get('max_temperature')} C. Boost "
-            + ", ".join(recommended[:3])
+            + ", ".join(recommended[:MAX_ACTION_FRUIT_NAMES])
             + "."
         ),
     }
 
-def fetch_and_prepare_data():
+
+def fetch_and_prepare_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     """Fetch sales data from Supabase with retry logic"""
-    
+
     def _fetch_from_supabase():
-        print("Fetching sales data from Supabase...")
-        print(f"Connecting to: {URL}")
+        LOGGER.info("Fetching sales data from Supabase...")
+        LOGGER.info(f"Connecting to: {URL}")
         response = supabase.table("sales_log").select("*").execute()
         return response
-    
+
     try:
         response = _retry_with_backoff(_fetch_from_supabase, max_retries=5)
         df = pd.DataFrame(response.data)
-        print(f"Successfully fetched {len(df)} records from sales_log")
-    except Exception as e:
-        print(f"\nERROR: Failed to connect to Supabase")
-        print(f"Exception: {str(e)}\n")
-        print("Troubleshooting steps:")
-        print("1. Verify SUPABASE_URL and SUPABASE_KEY are set in .env")
-        print("2. Check your internet connection")
-        print("3. Verify the Supabase project is accessible")
-        print("4. Check if your IP is blocked by firewall/proxy")
-        print("5. Visit https://status.supabase.com to check service status\n")
+        LOGGER.info(f"Successfully fetched {len(df)} records from sales_log")
+    except Exception:
+        LOGGER.exception("Failed to fetch sales data from Supabase")
         raise
-    
-    csv_path = SCRIPT_DIR / 'data' / 'processed' / 'master_training_data.csv'
+
+    csv_path = SCRIPT_DIR / "data" / "processed" / "master_training_data.csv"
     if not csv_path.exists():
         raise FileNotFoundError(f"Training data not found at {csv_path}")
-    
+
     enriched_df = pd.read_csv(csv_path)
-    print(f"Loaded {len(enriched_df)} training records from CSV")
+    LOGGER.info(f"Loaded {len(enriched_df)} training records from CSV")
     from validators import validate_sales_data
 
     known_items = set(DEFAULT_FRUIT_PRICES)
-    # The enriched export is the local item catalog snapshot and includes configured/custom fruit names.
+    # The enriched export is the local catalog snapshot, including configured custom fruit names.
     if "items" in enriched_df:
         for values in enriched_df["items"].apply(_parse_items):
             for item in values if isinstance(values, list) else []:
@@ -521,13 +545,17 @@ def fetch_and_prepare_data():
         raise ValueError("Input validation failed: no known item names found in sales data")
     df, _ = validate_sales_data(df, known_items, "Supabase sales_log")
     enriched_df, _ = validate_sales_data(enriched_df, known_items, "enriched training data")
+    df.attrs["validation_warnings"] = df.attrs.get(
+        "validation_warnings", []
+    ) + enriched_df.attrs.get("validation_warnings", [])
     return df, enriched_df
 
-def format_basket_rules(rules_df):
+
+def format_basket_rules(rules_df: pd.DataFrame) -> list[dict[str, Any]]:
     """Convert association rules into readable bundle suggestions"""
     if rules_df.empty:
         return []
-    
+
     bundles = []
     seen_pairs = set()
     sorted_rules = rules_df.sort_values(
@@ -536,9 +564,17 @@ def format_basket_rules(rules_df):
     )
 
     for idx, row in sorted_rules.iterrows():
-        antecedents = list(row['antecedents']) if hasattr(row['antecedents'], '__iter__') else [row['antecedents']]
-        consequents = list(row['consequents']) if hasattr(row['consequents'], '__iter__') else [row['consequents']]
-        
+        antecedents = (
+            list(row["antecedents"])
+            if hasattr(row["antecedents"], "__iter__")
+            else [row["antecedents"]]
+        )
+        consequents = (
+            list(row["consequents"])
+            if hasattr(row["consequents"], "__iter__")
+            else [row["consequents"]]
+        )
+
         pair_1 = antecedents[0] if antecedents else "Item"
         pair_2 = consequents[0] if consequents else "Item"
         pair_key = frozenset([pair_1, pair_2])
@@ -547,18 +583,19 @@ def format_basket_rules(rules_df):
             continue
 
         seen_pairs.add(pair_key)
-        raw_confidence = _safe_float(row['confidence'] if 'confidence' in row else 0.0)
-        lift = _safe_float(row['lift'] if 'lift' in row else 0.0)
-        pair_count = int(_safe_float(row['pair_count'] if 'pair_count' in row else 0))
+        raw_confidence = _safe_float(row["confidence"] if "confidence" in row else 0.0)
+        lift = _safe_float(row["lift"] if "lift" in row else 0.0)
+        pair_count = int(_safe_float(row["pair_count"] if "pair_count" in row else 0))
         antecedent_count = int(
-            _safe_float(row['antecedent_count'] if 'antecedent_count' in row else 0)
+            _safe_float(row["antecedent_count"] if "antecedent_count" in row else 0)
         )
         confidence = (
-            (pair_count + 1) / (antecedent_count + 2)
+            (pair_count + BUNDLE_CONFIDENCE_PRIOR_COUNT)
+            / (antecedent_count + BUNDLE_ANTECEDENT_PRIOR_COUNT)
             if antecedent_count > 0
             else raw_confidence
         )
-        confidence_percent = min(round(confidence * 100), 95)
+        confidence_percent = min(round(confidence * 100), BUNDLE_CONFIDENCE_CAP_PERCENT)
 
         bundles.append(
             {
@@ -579,9 +616,9 @@ def format_basket_rules(rules_df):
             }
         )
 
-        if len(bundles) == 5:
+        if len(bundles) == MAX_RECOMMENDED_FRUITS:
             break
-    
+
     return bundles
 
 
@@ -589,7 +626,7 @@ def _fruit_baselines(item_sales):
     if item_sales.empty:
         return {}
 
-    observed_dates = sorted(item_sales["date"].unique())[-7:]
+    observed_dates = sorted(item_sales["date"].unique())[-RECENT_SALES_DAYS:]
     recent_sales = item_sales[item_sales["date"].isin(observed_dates)]
     day_count = max(len(observed_dates), 1)
     grouped = (
@@ -642,7 +679,10 @@ def _apply_per_fruit_breakdown(stock_advice, enriched_data, festival_advice):
             revenue = baseline["revenue"]
             is_festival_pick = is_festival_day and fruit_name in festival_fruits
             if is_festival_day and fruit_name in festival_fruits:
-                quantity_kg = max(quantity_kg * 1.4, quantity_kg + 1)
+                quantity_kg = max(
+                    quantity_kg * FESTIVAL_DEMAND_MULTIPLIER,
+                    quantity_kg + FESTIVAL_MINIMUM_EXTRA_KG,
+                )
                 revenue = quantity_kg * baseline["unit_price"]
 
             fruit_rows.append(
@@ -661,8 +701,8 @@ def _apply_per_fruit_breakdown(stock_advice, enriched_data, festival_advice):
             for fruit_name in festival_fruits:
                 if fruit_name in known_fruits:
                     continue
-                unit_price = DEFAULT_FRUIT_PRICES.get(fruit_name, 100)
-                quantity_kg = 2.0
+                unit_price = DEFAULT_FRUIT_PRICES.get(fruit_name, DEFAULT_UNIT_PRICE)
+                quantity_kg = WEATHER_PICK_QUANTITY_KG
                 revenue = quantity_kg * unit_price
                 fruit_rows.append(
                     {
@@ -679,7 +719,7 @@ def _apply_per_fruit_breakdown(stock_advice, enriched_data, festival_advice):
             fruit_rows,
             key=lambda item: (item["is_festival_pick"], item["expected_revenue"]),
             reverse=True,
-        )[:5]
+        )[:MAX_STOCK_ADVICE_ITEMS]
 
         total_revenue = sum(item["expected_revenue"] for item in fruit_rows)
         total_kg = sum(item["suggested_kg"] for item in fruit_rows)
@@ -688,10 +728,12 @@ def _apply_per_fruit_breakdown(stock_advice, enriched_data, festival_advice):
             "top_fruits": fruit_rows,
             "expected_revenue": round(total_revenue),
             "revenue_label": f"Expected revenue: {_format_rupees(total_revenue)}",
-            "stock_label": f"Top stock target: {_format_kg(total_kg)} across {len(fruit_rows)} fruits",
+            "stock_label": (
+                f"Top stock target: {_format_kg(total_kg)} across {len(fruit_rows)} fruits"
+            ),
             "action": (
                 "Prepare "
-                + ", ".join(item["stock_label"] for item in fruit_rows[:3])
+                + ", ".join(item["stock_label"] for item in fruit_rows[:MAX_ACTION_FRUIT_NAMES])
                 + "."
             )
             if fruit_rows
@@ -701,7 +743,7 @@ def _apply_per_fruit_breakdown(stock_advice, enriched_data, festival_advice):
         if is_festival_day and festival_fruits:
             updated_day["event_adjustment"] = (
                 "Festival boost added for "
-                + ", ".join(festival_fruits[:3])
+                + ", ".join(festival_fruits[:MAX_ACTION_FRUIT_NAMES])
                 + "."
             )
 
@@ -709,21 +751,27 @@ def _apply_per_fruit_breakdown(stock_advice, enriched_data, festival_advice):
 
     return updated_advice
 
-def format_forecast_advice(forecast_df):
+
+def format_forecast_advice(forecast_df: pd.DataFrame) -> list[dict[str, Any]]:
     """Convert forecast rows into clear inventory actions for the app"""
     if forecast_df.empty:
         return []
-    
+
     advice = []
-    for idx, row in forecast_df.tail(7).iterrows():
-        date_str = str(row['ds']).split(' ')[0] if 'ds' in row else ""
-        predicted = max(0.0, _safe_float(row['yhat'] if 'yhat' in row else 0.0))
-        upper_bound = max(predicted, _safe_float(row['yhat_upper'] if 'yhat_upper' in row else predicted))
-        lower_bound = max(0.0, min(predicted, _safe_float(row['yhat_lower'] if 'yhat_lower' in row else predicted)))
+    for idx, row in forecast_df.tail(FORECAST_HORIZON_DAYS).iterrows():
+        date_str = str(row["ds"]).split(" ")[0] if "ds" in row else ""
+        predicted = max(0.0, _safe_float(row["yhat"] if "yhat" in row else 0.0))
+        upper_bound = max(
+            predicted, _safe_float(row["yhat_upper"] if "yhat_upper" in row else predicted)
+        )
+        lower_bound = max(
+            0.0,
+            min(predicted, _safe_float(row["yhat_lower"] if "yhat_lower" in row else predicted)),
+        )
         suggested_stock = round(upper_bound)
         predicted_units = round(predicted)
         confidence = _confidence_label(predicted, lower_bound, upper_bound)
-        
+
         advice.append(
             {
                 "date": date_str,
@@ -736,19 +784,21 @@ def format_forecast_advice(forecast_df):
                 "demand_label": f"Expect about {predicted_units} items",
                 "range_label": f"Likely range: {round(lower_bound)}-{suggested_stock} items",
                 "action": f"Keep around {suggested_stock} items ready for the day.",
-                "model_basis": row.get('model_basis', 'sales trend') if hasattr(row, 'get') else 'sales trend',
+                "model_basis": row.get("model_basis", "sales trend")
+                if hasattr(row, "get")
+                else "sales trend",
             }
         )
-    
+
     return advice
 
 
-def build_forecast_summary(stock_advice):
+def build_forecast_summary(stock_advice: list[dict[str, Any]]) -> str:
+    """Summarize daily stock advice in the sentence shown in the Flutter app."""
     if not stock_advice:
         return "Add a few more sales to generate a reliable demand forecast."
     average_revenue = round(
-        sum(item.get("expected_revenue", 0) for item in stock_advice)
-        / len(stock_advice)
+        sum(item.get("expected_revenue", 0) for item in stock_advice) / len(stock_advice)
     )
     weekly_revenue = sum(item.get("expected_revenue", 0) for item in stock_advice)
     busiest_day = max(
@@ -766,170 +816,260 @@ def build_forecast_summary(stock_advice):
     )
 
 
-def insert_daily_insight(insight_data):
-    try:
-        return supabase.table("daily_insights").insert(insight_data).execute()
-    except Exception as e:
-        message = str(e).lower()
-        optional_json_columns = ("festival_advice", "weather_advice")
-        missing_optional_column = (
-            any(column in message for column in optional_json_columns)
-            or (
-                "could not find" in message
-                and "column" in message
-                and any(column.replace("_advice", "") in message for column in optional_json_columns)
-            )
-        )
-        if not missing_optional_column:
-            raise
+def insert_daily_insight(insight_data: dict[str, Any]) -> Any:
+    """Insert an already schema-validated daily insight into Supabase."""
+    return supabase.table("daily_insights").insert(insight_data).execute()
 
-        fallback_data = {
-            key: value
-            for key, value in insight_data.items()
-            if key not in optional_json_columns
-        }
-        print("Optional insight columns not found; retrying without event/weather data.")
-        print("Run sql/setup_daily_insights_table.sql to enable all insight cards.")
-        return supabase.table("daily_insights").insert(fallback_data).execute()
 
-def log_performance(metrics):
+def log_performance(metrics: dict[str, Any]) -> dict[str, Any]:
+    """Append one run's aggregate evaluation and return metrics with regression flags."""
     log_path = SCRIPT_DIR / "logs" / "performance_history.csv"
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    previous = pd.read_csv(log_path) if log_path.exists() and log_path.stat().st_size else pd.DataFrame()
+    previous = (
+        pd.read_csv(log_path) if log_path.exists() and log_path.stat().st_size else pd.DataFrame()
+    )
     if not previous.empty and metrics.get("mae_kg") is not None:
-        trailing = pd.to_numeric(previous.get("mae_kg"), errors="coerce").dropna().tail(7)
+        historical_mae = previous.get("mae_kg", pd.Series(dtype="float64"))
+        trailing = (
+            pd.to_numeric(historical_mae, errors="coerce").dropna().tail(PERFORMANCE_TRAILING_RUNS)
+        )
         current_mae = _safe_float(metrics.get("mae_kg"), -1)
         trailing_mean = float(trailing.mean()) if len(trailing) else None
-        regression = trailing_mean is not None and len(trailing) >= 3 and current_mae > trailing_mean * 1.25
-        metrics["mae_kg_trailing_7_run_avg"] = round(trailing_mean, 3) if trailing_mean is not None else None
+        regression = (
+            trailing_mean is not None
+            and len(trailing) >= PERFORMANCE_MIN_REGRESSION_RUNS
+            and current_mae > trailing_mean * (1 + METRIC_REGRESSION_THRESHOLD)
+        )
+        metrics["mae_kg_trailing_7_run_avg"] = (
+            round(trailing_mean, 3) if trailing_mean is not None else None
+        )
         metrics["regression_alert"] = bool(regression)
         if regression:
-            print(f"FORECAST REGRESSION: MAE {current_mae:.3f} kg exceeds trailing 7-run average "
-                  f"{trailing_mean:.3f} kg by more than 25%.")
+            metrics["status"] = "degraded"
+            LOGGER.warning(
+                "Forecast error exceeded its trailing regression threshold",
+                extra={"current_mae": current_mae, "trailing_mean_mae": trailing_mean},
+            )
 
-    log_entry = pd.DataFrame([{
-        "timestamp": datetime.now().isoformat(),
-        **metrics
-    }])
+    log_entry = pd.DataFrame([{"timestamp": datetime.now().isoformat(), **metrics}])
 
     pd.concat([previous, log_entry], ignore_index=True, sort=False).to_csv(log_path, index=False)
+    return metrics
 
-def main():
 
-    print("Starting RetailFlow AI intelligence pipeline...")
+@dataclass
+class StageOutcome:
+    """Result of one independently logged pipeline stage."""
 
-    raw_sales, enriched_data = fetch_and_prepare_data()
+    name: str
+    succeeded: bool
+    value: Any = None
 
-    print("Running market basket analysis...")
-    basket_rules = run_basket_analysis(raw_sales)
 
-    print("Generating demand forecast...")
-    forecast, forecast_metrics= run_demand_forecasting(enriched_data)
+def _run_stage(name: str, callback: Callable[[], Any]) -> StageOutcome:
+    """Run one pipeline stage and retain failures so later independent stages can proceed."""
+    LOGGER.info("Pipeline stage started", extra={"stage": name})
+    try:
+        value = callback()
+    except Exception:
+        LOGGER.exception("Pipeline stage failed", extra={"stage": name})
+        return StageOutcome(name=name, succeeded=False)
+    LOGGER.info("Pipeline stage completed", extra={"stage": name})
+    return StageOutcome(name=name, succeeded=True, value=value)
 
-    print("Formatting insights for Flutter app...")
-    
-    # Parse and structure the outputs
+
+def _skipped_stage(name: str, reason: str) -> StageOutcome:
+    """Log an explicit stage skip caused by a failed prerequisite."""
+    LOGGER.error("Pipeline stage skipped", extra={"stage": name, "reason": reason})
+    return StageOutcome(name=name, succeeded=False)
+
+
+def _performance_metrics(
+    raw_sales: pd.DataFrame, stock_advice: list, forecast_metrics: dict
+) -> dict:
+    """Build aggregate performance-history fields from per-item holdout scores."""
+    metrics = {
+        "status": "success",
+        "bundles_generated": 0,
+        "forecast_days": len(stock_advice),
+        "festival_active": False,
+        "total_records_fetched": len(raw_sales),
+        "weekly_revenue_estimate": sum(day.get("expected_revenue", 0) for day in stock_advice),
+        "item_metrics": json.dumps(forecast_metrics.get("item_metrics", {}), sort_keys=True),
+        "evaluation_days": forecast_metrics.get("evaluation_days"),
+        "metric_unit": forecast_metrics.get("metric_unit", "kg per item"),
+    }
+    item_metrics = forecast_metrics.get("item_metrics", {})
+    item_scores = [item["prophet"] for item in item_metrics.values() if "prophet" in item]
+    baseline_scores = [item["baseline"] for item in item_metrics.values() if "baseline" in item]
+    for model_name, scores in (("", item_scores), ("baseline_", baseline_scores)):
+        if not scores:
+            continue
+        metrics[f"{model_name}mae_kg"] = round(
+            sum(item["mae_kg"] for item in scores) / len(scores), 3
+        )
+        metrics[f"{model_name}mse_kg2"] = round(
+            sum(item["mse_kg2"] for item in scores) / len(scores), 3
+        )
+        metrics[f"{model_name}rmse_kg"] = round(
+            sum(item["rmse_kg"] for item in scores) / len(scores), 3
+        )
+    if item_scores:
+        total_actual = sum(item["actual_kg"] for item in item_scores)
+        metrics["wape_pct"] = (
+            round(100 * sum(item["absolute_error_kg"] for item in item_scores) / total_actual, 2)
+            if total_actual
+            else None
+        )
+        metrics["bias_kg"] = round(
+            sum(item["bias_kg"] for item in item_scores) / len(item_scores), 3
+        )
+    return metrics
+
+
+def _format_insight_payload(
+    raw_sales: pd.DataFrame,
+    enriched_data: pd.DataFrame,
+    basket_rules: pd.DataFrame,
+    forecast: pd.DataFrame,
+) -> tuple[dict, bool]:
+    """Build the mobile app's daily insight record from model and enrichment outputs."""
     suggested_bundles = format_basket_rules(basket_rules)
     stock_advice = format_forecast_advice(forecast)
     festival_advice = get_festival_advice(enriched_data)
-    stock_advice = _apply_per_fruit_breakdown(
-        stock_advice,
-        enriched_data,
-        festival_advice,
-    )
+    stock_advice = _apply_per_fruit_breakdown(stock_advice, enriched_data, festival_advice)
     tomorrow_weather = fetch_tomorrow_weather()
-    stock_advice, weather_advice = _apply_weather_adjustment(
-        stock_advice,
-        tomorrow_weather,
+    weather_is_current = (
+        tomorrow_weather.get("date") == (date.today() + timedelta(days=1)).isoformat()
     )
-    
-    # Generate summary
-    forecast_summary = build_forecast_summary(stock_advice)
-    
-    print("Syncing insights back to Supabase...")
-    # Push insights to Supabase
-    insight_data = {
-        "forecast_summary": forecast_summary,
+    stock_advice, weather_advice = _apply_weather_adjustment(stock_advice, tomorrow_weather)
+    payload = {
+        "schema_version": INSIGHTS_SCHEMA_VERSION,
+        "forecast_summary": build_forecast_summary(stock_advice),
         "suggested_bundles": suggested_bundles,
         "stock_advice": stock_advice,
         "festival_advice": festival_advice,
         "weather_advice": weather_advice,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
-
-    # Validate & standardize payload so Flutter decoding never breaks on schema drift.
-    insight_data, validation_errors = validate_and_standardize_payload(insight_data)
-    if validation_errors:
-        print("Payload validation warnings:")
-        for err in validation_errors:
-            print(f" - {err}")
+    return payload, weather_is_current
 
 
-    try:
-        result = insert_daily_insight(insight_data)
-        print("Insights successfully pushed to cloud!")
-        print(f"   Forecast: {forecast_summary}")
-        if festival_advice:
-            print(f"   Festival alert: {festival_advice['title']}")
-        if weather_advice:
-            print(f"   Weather alert: {weather_advice.get('action')}")
-        print(f"   Bundles: {len(suggested_bundles)} recommendations")
-        print(f"   Stock advice: {len(stock_advice)} days forecasted")
+def _push_insight_payload(payload: dict) -> Any:
+    """Validate against the JSON contract, then insert the insight record."""
+    validate_daily_insights_payload(payload)
+    return insert_daily_insight(payload)
 
-        
-        metrics = {
-            "status": "success",
-            "bundles_generated": len(suggested_bundles),
-            "forecast_days": len(stock_advice),
-            "festival_active": bool(festival_advice),
-            "total_records_fetched": len(raw_sales),
-            "weekly_revenue_estimate": sum(
-                day.get("expected_revenue", 0) for day in stock_advice
+
+def main() -> int:
+    """Run validation, basket analysis, forecasting and publish; return nonzero when degraded."""
+    configure_logging()
+    LOGGER.info("Starting RetailFlow AI intelligence pipeline")
+    outcomes: list[StageOutcome] = []
+    degradation_reasons: list[str] = []
+    validation = _run_stage("validate", fetch_and_prepare_data)
+    outcomes.append(validation)
+
+    if validation.succeeded:
+        raw_sales, enriched_data = validation.value
+        validation_warnings = raw_sales.attrs.get("validation_warnings", [])
+        if validation_warnings:
+            degradation_reasons.extend(validation_warnings)
+            LOGGER.warning(
+                "Input data required validation recovery", extra={"warnings": validation_warnings}
+            )
+        basket = _run_stage("basket", lambda: run_basket_analysis(raw_sales))
+        forecast_result = _run_stage("forecast", lambda: run_demand_forecasting(enriched_data))
+        outcomes.extend((basket, forecast_result))
+    else:
+        raw_sales = pd.DataFrame()
+        enriched_data = pd.DataFrame()
+        basket = _skipped_stage("basket", "input validation failed")
+        forecast_result = _skipped_stage("forecast", "input validation failed")
+        outcomes.extend((basket, forecast_result))
+
+    if forecast_result.succeeded:
+        forecast, forecast_metrics = forecast_result.value
+    else:
+        forecast, forecast_metrics = pd.DataFrame(), {}
+
+    if validation.succeeded and forecast_result.succeeded:
+        formatting = _run_stage(
+            "format",
+            lambda: _format_insight_payload(
+                raw_sales,
+                enriched_data,
+                basket.value if basket.succeeded else pd.DataFrame(),
+                forecast,
             ),
-            "item_metrics": json.dumps(forecast_metrics.get("item_metrics", {}), sort_keys=True),
-            "evaluation_days": forecast_metrics.get("evaluation_days"),
-            "metric_unit": forecast_metrics.get("metric_unit", "kg per item"),
-        }
-        item_metrics = forecast_metrics.get("item_metrics", {})
-        item_scores = [item["prophet"] for item in item_metrics.values() if "prophet" in item]
-        baseline_scores = [item["baseline"] for item in item_metrics.values()]
-        if item_scores:
-            metrics["mae_kg"] = round(sum(item["mae_kg"] for item in item_scores) / len(item_scores), 3)
-            metrics["mse_kg2"] = round(sum(item["mse_kg2"] for item in item_scores) / len(item_scores), 3)
-            metrics["rmse_kg"] = round(sum(item["rmse_kg"] for item in item_scores) / len(item_scores), 3)
-            total_actual = sum(item["actual_kg"] for item in item_scores)
-            metrics["wape_pct"] = round(100 * sum(item["absolute_error_kg"] for item in item_scores)
-                                        / total_actual, 2) if total_actual else None
-            metrics["bias_kg"] = round(sum(item["bias_kg"] for item in item_scores) / len(item_scores), 3)
-        else:
-            metrics.update({"mae_kg": None, "mse_kg2": None, "rmse_kg": None,
-                            "wape_pct": None, "bias_kg": None})
-        metrics["baseline_mse_kg2"] = round(sum(item["mse_kg2"] for item in baseline_scores) / len(
-            baseline_scores), 3) if baseline_scores else None
-        metrics["baseline_mae_kg"] = round(sum(item["mae_kg"] for item in baseline_scores) / len(
-            baseline_scores), 3) if baseline_scores else None
-        metrics["baseline_rmse_kg"] = round(sum(item["rmse_kg"] for item in baseline_scores) / len(
-            baseline_scores), 3) if baseline_scores else None
-        log_performance(metrics)
-        print("Performance log updated.")
+        )
+    else:
+        reason = "validation or forecast stage failed"
+        formatting = _skipped_stage("format", reason)
+    outcomes.append(formatting)
 
-    except Exception as e:
-        print(f"Failed to insert insights: {e}")
-        
-        #log failures so we can track them
-        log_performance({
-            "status": "failed",
-            "error": str(e),
-            "bundles_generated": 0,
-            "forecast_days": 0,
-            "festival_active": False,
-            "total_records_fetched": len(raw_sales) if 'raw_sales' in locals() else 0,
-            "weekly_revenue_estimate": 0,
-        })
-        raise
-    print("Pipeline Complete. Insights are ready!!")
+    if formatting.succeeded:
+        insight_payload, weather_is_current = formatting.value
+        if not weather_is_current:
+            degradation_reasons.append("weather forecast unavailable or stale")
+            LOGGER.warning("Insight uses no current weather forecast")
+        if not basket.succeeded:
+            insight_payload["suggested_bundles"] = []
+            degradation_reasons.append("basket analysis failed")
+        insight_payload, payload_warnings = validate_and_standardize_payload(insight_payload)
+        if payload_warnings:
+            LOGGER.warning(
+                "Payload standardization reported warnings", extra={"warnings": payload_warnings}
+            )
+            degradation_reasons.append("insight payload required fallback values")
+    else:
+        insight_payload = None
+
+    if insight_payload is not None:
+        push = _run_stage("push", lambda: _push_insight_payload(insight_payload))
+    else:
+        push = _skipped_stage("push", "no validated insight payload is available")
+    outcomes.append(push)
+
+    if push.succeeded:
+        insight_payload["suggested_bundles"] = insight_payload.get("suggested_bundles", [])
+        metrics = _performance_metrics(raw_sales, insight_payload["stock_advice"], forecast_metrics)
+        metrics["bundles_generated"] = len(insight_payload["suggested_bundles"])
+        metrics["festival_active"] = bool(insight_payload["festival_advice"])
+        if degradation_reasons:
+            metrics["status"] = "degraded"
+        log_result = _run_stage("performance_log", lambda: log_performance(metrics))
+        outcomes.append(log_result)
+        if log_result.succeeded and log_result.value.get("regression_alert"):
+            degradation_reasons.append("forecast metric regression")
+    else:
+        log_result = _run_stage(
+            "performance_log",
+            lambda: log_performance(
+                {
+                    "status": "failed",
+                    "total_records_fetched": len(raw_sales),
+                    "bundles_generated": 0,
+                    "forecast_days": 0,
+                }
+            ),
+        )
+        outcomes.append(log_result)
+
+    degraded = bool(degradation_reasons) or any(not outcome.succeeded for outcome in outcomes)
+    if degraded:
+        LOGGER.error(
+            "Pipeline finished with degraded or failed stages",
+            extra={
+                "failed_stages": [outcome.name for outcome in outcomes if not outcome.succeeded],
+                "degradation_reasons": degradation_reasons,
+            },
+        )
+        return 1
+    LOGGER.info("Pipeline completed successfully")
+    return 0
+
 
 if __name__ == "__main__":
-    main()
-    
+    raise SystemExit(main())

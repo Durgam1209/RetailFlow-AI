@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://retailflow.example/schemas/daily_insights.schema.json",
+  "title": "RetailFlow daily insights payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "forecast_summary",
+    "suggested_bundles",
+    "stock_advice",
+    "festival_advice",
+    "weather_advice",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "forecast_summary": {"type": "string", "minLength": 1},
+    "suggested_bundles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pair_1", "pair_2", "title", "confidence", "raw_confidence", "confidence_percent", "lift", "pair_count", "antecedent_count", "strength", "advice"],
+        "properties": {
+          "pair_1": {"type": "string"}, "pair_2": {"type": "string"}, "title": {"type": "string"},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "raw_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "confidence_percent": {"type": "integer", "minimum": 0, "maximum": 100},
+          "lift": {"type": "number", "minimum": 0},
+          "pair_count": {"type": "integer", "minimum": 0}, "antecedent_count": {"type": "integer", "minimum": 0},
+          "strength": {"type": "string"}, "advice": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "stock_advice": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["date", "display_date", "predicted_demand", "suggested_stock", "lower_bound", "expected_revenue", "confidence_label", "demand_label", "range_label", "action", "top_fruits"],
+        "properties": {
+          "date": {"type": "string", "format": "date"}, "display_date": {"type": "string"},
+          "predicted_demand": {"type": "integer"}, "suggested_stock": {"type": "integer"},
+          "lower_bound": {"type": "integer"}, "expected_revenue": {"type": "number"},
+          "confidence_label": {"type": "string"}, "demand_label": {"type": "string"},
+          "range_label": {"type": "string"}, "action": {"type": "string"},
+          "event_adjustment": {}, "weather_adjustment": {},
+          "top_fruits": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["fruit_name", "suggested_kg", "expected_revenue", "is_festival_pick", "is_weather_pick", "stock_label", "revenue_label"],
+              "properties": {
+                "fruit_name": {"type": "string"}, "suggested_kg": {"type": "number", "minimum": 0},
+                "expected_revenue": {"type": "number", "minimum": 0}, "is_festival_pick": {"type": "boolean"},
+                "is_weather_pick": {"type": "boolean"}, "stock_label": {"type": "string"}, "revenue_label": {"type": "string"}
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "festival_advice": {
+      "type": "object",
+      "properties": {
+        "is_active": {"type": "boolean"}, "priority": {"type": "string"},
+        "festival_name": {"type": "string"}, "festival_date": {"type": "string", "format": "date"},
+        "title": {"type": "string"}, "action": {"type": "string"},
+        "merchandising": {"type": "string"},
+        "recommended_fruits": {"type": "array", "items": {"type": "string"}},
+        "basis": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "weather_advice": {
+      "type": "object",
+      "properties": {
+        "date": {"type": "string", "format": "date"}, "city": {"type": "string"},
+        "condition": {"type": "string"}, "temperature": {"type": "number"},
+        "min_temperature": {"type": "number"}, "max_temperature": {"type": "number"},
+        "feels_like": {"type": "number"}, "humidity": {"type": "integer"},
+        "wind_speed": {"type": "number"},
+        "rain_probability": {"type": "number", "minimum": 0, "maximum": 1},
+        "recommended_fruits": {"type": "array", "items": {"type": "string"}},
+        "action": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "created_at": {"type": "string", "format": "date-time"}
+  }
+}

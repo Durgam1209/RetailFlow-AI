@@ -1,9 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
+from pathlib import Path
+from typing import Any
+
 import pandas as pd
-from typing import Any, Dict, List, Tuple
+from config import INSIGHTS_SCHEMA_VERSION, MAX_STOCK_ADVICE_ITEMS, SCHEMA_ERROR_SAMPLE_LIMIT
+from jsonschema import Draft202012Validator, FormatChecker
+
+LOGGER = logging.getLogger(__name__)
+SCHEMA_PATH = Path(__file__).parent / "schemas" / "daily_insights.schema.json"
 
 
 REQUIRED_BUNDLE_KEYS = {
@@ -20,31 +28,53 @@ REQUIRED_BUNDLE_KEYS = {
     "advice",
 }
 
-SALES_REQUIRED_COLUMNS = {"transaction_id", "created_at", "created_date", "total_amount", "item_count", "items"}
+SALES_REQUIRED_COLUMNS = {
+    "transaction_id",
+    "created_at",
+    "created_date",
+    "total_amount",
+    "item_count",
+    "items",
+}
 
 
-def validate_sales_data(frame: pd.DataFrame, known_items=None, label="sales_log") -> tuple[pd.DataFrame, int]:
+def validate_sales_data(
+    frame: pd.DataFrame,
+    known_items: set[str] | None = None,
+    label: str = "sales_log",
+) -> tuple[pd.DataFrame, int]:
     """Validate, deduplicate and remove return/void lines from transaction demand."""
     missing = sorted(SALES_REQUIRED_COLUMNS - set(frame.columns))
     if missing:
         raise ValueError(f"{label} is missing required columns: {', '.join(missing)}")
     data = frame.copy()
-    if data["transaction_id"].isna().any() or data["transaction_id"].astype(str).str.strip().eq("").any():
+    validation_warnings: list[str] = []
+    validation_warnings: list[str] = []
+    validation_warnings: list[str] = []
+    if (
+        data["transaction_id"].isna().any()
+        or data["transaction_id"].astype(str).str.strip().eq("").any()
+    ):
         raise ValueError(f"{label} contains a null or blank transaction_id")
     data["transaction_id"] = data["transaction_id"].astype(str)
     duplicates = int(data.duplicated("transaction_id", keep="first").sum())
     if duplicates:
-        print(f"Validation: removed {duplicates} duplicate transaction row(s) by transaction_id")
+        validation_warnings.append(f"removed {duplicates} duplicate transaction row(s)")
+        validation_warnings.append(f"removed {duplicates} duplicate transaction row(s)")
+        validation_warnings.append(f"removed {duplicates} duplicate transaction row(s)")
+        LOGGER.warning(
+            "Removed duplicate transactions by transaction_id", extra={"count": duplicates}
+        )
         data = data.drop_duplicates("transaction_id", keep="first").copy()
 
     parsed_dates = pd.to_datetime(data["created_date"], errors="coerce", utc=True)
     if parsed_dates.isna().any():
-        rows = data.index[parsed_dates.isna()].tolist()[:5]
+        rows = data.index[parsed_dates.isna()].tolist()[:SCHEMA_ERROR_SAMPLE_LIMIT]
         raise ValueError(f"{label} has invalid created_date values at row(s): {rows}")
     data["created_date"] = parsed_dates.dt.tz_convert(None).dt.normalize()
     parsed_timestamps = pd.to_datetime(data["created_at"], errors="coerce", utc=True)
     if parsed_timestamps.isna().any():
-        rows = data.index[parsed_timestamps.isna()].tolist()[:5]
+        rows = data.index[parsed_timestamps.isna()].tolist()[:SCHEMA_ERROR_SAMPLE_LIMIT]
         raise ValueError(f"{label} has invalid created_at timestamps at row(s): {rows}")
     data["created_at"] = parsed_timestamps
     for column in ("total_amount", "item_count"):
@@ -72,6 +102,7 @@ def validate_sales_data(frame: pd.DataFrame, known_items=None, label="sales_log"
             except (ValueError, TypeError):
                 try:
                     import ast
+
                     items = ast.literal_eval(items)
                 except (ValueError, SyntaxError):
                     raise ValueError(f"{label}.items is malformed at row {row_index}")
@@ -106,7 +137,15 @@ def validate_sales_data(frame: pd.DataFrame, known_items=None, label="sales_log"
     data["items"] = clean_items
     data["item_count"] = clean_counts
     if return_line_count:
-        print(f"Validation: excluded {return_line_count} negative return/void item line(s) from demand")
+        validation_warnings.append(f"excluded {return_line_count} return/void line(s)")
+        validation_warnings.append(f"excluded {return_line_count} return/void line(s)")
+        validation_warnings.append(f"excluded {return_line_count} return/void line(s)")
+        LOGGER.warning(
+            "Excluded negative return or void lines from demand", extra={"count": return_line_count}
+        )
+    data.attrs["validation_warnings"] = validation_warnings
+    data.attrs["validation_warnings"] = validation_warnings
+    data.attrs["validation_warnings"] = validation_warnings
     return data, return_line_count
 
 
@@ -115,6 +154,7 @@ def _is_number(x: Any) -> bool:
 
 
 def coerce_int(x: Any, default: int = 0) -> int:
+    """Convert a JSON-compatible value to an integer or return its safe default."""
     try:
         if x is None:
             return default
@@ -126,6 +166,7 @@ def coerce_int(x: Any, default: int = 0) -> int:
 
 
 def coerce_float(x: Any, default: float = 0.0) -> float:
+    """Convert a JSON-compatible value to a float or return its safe default."""
     try:
         if x is None:
             return default
@@ -147,21 +188,22 @@ def ensure_jsonable(value: Any) -> Any:
     if isinstance(value, list):
         return [ensure_jsonable(v) for v in value]
 
-    # Fallback to string
+    # Fallback to string for non-JSON library types.
     return str(value)
 
 
-def validate_and_standardize_payload(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
-    """Return (standardized_payload, errors)."""
-    errors: List[str] = []
+def validate_and_standardize_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Standardize legacy insight payloads and return any fields that required fallback values."""
+    errors: list[str] = []
 
-    standardized: Dict[str, Any] = dict(payload)
+    standardized: dict[str, Any] = dict(payload)
+    standardized["schema_version"] = INSIGHTS_SCHEMA_VERSION
 
     # forecast_summary
     forecast_summary = standardized.get("forecast_summary")
     if not isinstance(forecast_summary, str) or not forecast_summary.strip():
         errors.append("forecast_summary must be a non-empty string")
-        standardized["forecast_summary"] = "Demand is steady." 
+        standardized["forecast_summary"] = "Demand is steady."
 
     # suggested_bundles
     bundles = standardized.get("suggested_bundles")
@@ -169,7 +211,7 @@ def validate_and_standardize_payload(payload: Dict[str, Any]) -> Tuple[Dict[str,
         errors.append("suggested_bundles must be a list")
         bundles = []
 
-    std_bundles: List[Dict[str, Any]] = []
+    std_bundles: list[dict[str, Any]] = []
     for i, b in enumerate(bundles):
         if not isinstance(b, dict):
             errors.append(f"suggested_bundles[{i}] must be an object")
@@ -183,18 +225,30 @@ def validate_and_standardize_payload(payload: Dict[str, Any]) -> Tuple[Dict[str,
         std_b = {
             "pair_1": str(b.get("pair_1", "Item")),
             "pair_2": str(b.get("pair_2", "Item")),
-            "title": str(b.get("title", f"{b.get('pair_1','Item')} + {b.get('pair_2','Item')}")),
-            "confidence": coerce_float(b.get("confidence", b.get("confidence_percent", 0.0)) / (100.0 if _is_number(b.get("confidence", None)) and b.get("confidence", 0) > 1 else 1), default=0.0),
+            "title": str(b.get("title", f"{b.get('pair_1', 'Item')} + {b.get('pair_2', 'Item')}")),
+            "confidence": coerce_float(
+                b.get("confidence", b.get("confidence_percent", 0.0))
+                / (
+                    100.0
+                    if _is_number(b.get("confidence", None)) and b.get("confidence", 0) > 1
+                    else 1
+                ),
+                default=0.0,
+            ),
             "raw_confidence": coerce_float(b.get("raw_confidence", 0.0), default=0.0),
             "confidence_percent": coerce_int(b.get("confidence_percent", 0), default=0),
             "lift": coerce_float(b.get("lift", 0.0), default=0.0),
             "pair_count": coerce_int(b.get("pair_count", 0), default=0),
-            "antecedent_count": coerce_int(b.get("antecedent_count", b.get("antecedent_count", 0)), default=0),
+            "antecedent_count": coerce_int(
+                b.get("antecedent_count", b.get("antecedent_count", 0)), default=0
+            ),
             "strength": str(b.get("strength", "Worth testing")),
-            "advice": str(b.get(
-                "advice",
-                "Place these items together to make the basket easier to build.",
-            )),
+            "advice": str(
+                b.get(
+                    "advice",
+                    "Place these items together to make the basket easier to build.",
+                )
+            ),
         }
 
         std_bundles.append(std_b)
@@ -207,7 +261,7 @@ def validate_and_standardize_payload(payload: Dict[str, Any]) -> Tuple[Dict[str,
         errors.append("stock_advice must be a list")
         stock_advice = []
 
-    std_stock: List[Dict[str, Any]] = []
+    std_stock: list[dict[str, Any]] = []
     for i, d in enumerate(stock_advice):
         if not isinstance(d, dict):
             errors.append(f"stock_advice[{i}] must be an object")
@@ -222,7 +276,7 @@ def validate_and_standardize_payload(payload: Dict[str, Any]) -> Tuple[Dict[str,
         if not isinstance(top_fruits, list):
             top_fruits = []
 
-        std_top_fruits: List[Dict[str, Any]] = []
+        std_top_fruits: list[dict[str, Any]] = []
         for j, tf in enumerate(top_fruits):
             if not isinstance(tf, dict):
                 continue
@@ -242,7 +296,9 @@ def validate_and_standardize_payload(payload: Dict[str, Any]) -> Tuple[Dict[str,
             {
                 "date": str(date) if date is not None else "",
                 "display_date": str(display_date) if display_date is not None else "",
-                "predicted_demand": coerce_int(d.get("predicted_demand", d.get("expected_demand", 0)), 0),
+                "predicted_demand": coerce_int(
+                    d.get("predicted_demand", d.get("expected_demand", 0)), 0
+                ),
                 "suggested_stock": coerce_int(d.get("suggested_stock", d.get("upper_bound", 0)), 0),
                 "lower_bound": coerce_int(d.get("lower_bound", 0), 0),
                 "expected_revenue": coerce_float(d.get("expected_revenue", 0.0), 0.0),
@@ -252,7 +308,7 @@ def validate_and_standardize_payload(payload: Dict[str, Any]) -> Tuple[Dict[str,
                 "action": str(d.get("action", "Keep around items ready.")),
                 "event_adjustment": d.get("event_adjustment"),
                 "weather_adjustment": d.get("weather_adjustment"),
-                "top_fruits": std_top_fruits[:5],
+                "top_fruits": std_top_fruits[:MAX_STOCK_ADVICE_ITEMS],
             }
         )
 
@@ -285,3 +341,17 @@ def validate_and_standardize_payload(payload: Dict[str, Any]) -> Tuple[Dict[str,
     standardized = ensure_jsonable(standardized)
     return standardized, errors
 
+
+def validate_daily_insights_payload(payload: dict[str, Any]) -> None:
+    """Raise ``ValueError`` when an insight payload violates the versioned JSON contract."""
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    errors = sorted(
+        validator.iter_errors(payload), key=lambda error: str(list(error.absolute_path))
+    )
+    if errors:
+        details = "; ".join(
+            f"{'.'.join(str(part) for part in error.absolute_path) or '<root>'}: {error.message}"
+            for error in errors
+        )
+        raise ValueError(f"daily_insights schema validation failed: {details}")
