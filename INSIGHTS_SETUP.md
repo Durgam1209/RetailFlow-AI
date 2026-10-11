@@ -1,170 +1,65 @@
-# RetailFlow AI Insights - Setup & Troubleshooting Guide
+# Daily insights setup and troubleshooting
 
-## ✅ If Insights Are Not Updating
+## Set up Supabase
 
-Follow these steps to ensure the system is working properly:
+Run `sql/setup_daily_insights_table.sql` in the Supabase SQL Editor. It creates `public.daily_insights`, enables row-level security, and grants the public `anon` role read access to insights. The pipeline's nightly GitHub Actions job writes using the `SUPABASE_SERVICE_ROLE_KEY` Actions Secret, which bypasses RLS as a privileged backend credential. Never put that key in `ml_pipeline/.env`, Flutter configuration, or committed files.
 
-### Step 1: Create the `daily_insights` Table (if it doesn't exist)
+The pipeline's local `.env` uses `SUPABASE_URL` and `SUPABASE_KEY` (publishable or legacy anon key), plus optional `WEATHER_KEY`. Copy `ml_pipeline/.env.example` as a starting point. Local writes remain subject to RLS. To run a privileged publish, use the GitHub Actions **Nightly ML retrain** workflow and its repository secrets.
 
-1. Go to [Supabase Dashboard](https://app.supabase.com)
-2. Select your project
-3. Click **SQL Editor** → **New Query**
-4. Copy and paste the entire content from: `sql/setup_daily_insights_table.sql`
-5. Click **Run**
+Required GitHub Actions secrets for nightly runs:
 
-This creates the table with proper RLS policies so:
-- Flutter app (publishable/anon key) can **READ** insights
-- The nightly GitHub Actions job can **INSERT** insights using a service role key stored in GitHub Actions Secrets
+- `SUPABASE_URL`
+- `SUPABASE_KEY` (publishable or legacy anon key, used to fetch data)
+- `SUPABASE_SERVICE_ROLE_KEY` (backend insert credential)
+- `WEATHER_KEY` (optional)
 
----
+`ALERT_SLACK_WEBHOOK_URL` is optional; add it to enable Slack failure notifications.
 
-### Step 2: Run the Python ML Pipeline
+## Verify insights
 
-The nightly GitHub Actions workflow runs the pipeline with the service role key from GitHub Actions Secrets. To run it manually, open the repository's **Actions** tab, select **RetailFlow AI**, and choose **Run workflow**. Local `.env` files must not contain a service role key; the publishable key cannot insert insights under RLS.
+After dispatching **Nightly ML retrain** from the GitHub Actions tab, check the job log and the `daily_insights` table. The Flutter app reads that table with its publishable key. The JSON payload must satisfy [the versioned schema](ml_pipeline/schemas/daily_insights.schema.json); the current version is `1.0`.
 
----
-### Step 3: Verify Data in Supabase
+## Troubleshooting
 
-1. Go to Supabase Dashboard
-2. Click **Database** → **Tables**
-3. Select `daily_insights`
-4. You should see at least 1 row with:
-   - `forecast_summary` (text)
-   - `suggested_bundles` (JSON array)
-   - `stock_advice` (JSON array)
-   - `festival_advice` (JSON object)
-   - `created_at` (timestamp)
+### The app says “No AI insights available yet”
 
----
+The table may be empty or the app may be querying the wrong project. Check that the workflow completed, that a recent row exists in `daily_insights`, and that the Flutter URL and publishable key match that Supabase project.
 
-### Step 4: Run the Flutter App
+### Flutter reports an RLS error when reading insights
 
-```powershell
-cd C:\projects\RetailFlowAI\murali_fruits_ml
-flutter run --dart-define=SUPABASE_URL=your_supabase_url --dart-define=SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
+Confirm `daily_insights` has RLS enabled, an `anon` SELECT policy, and a SELECT grant. The setup script creates the intended read policy for this non-customer-facing recommendation data. Do not use the public policy as a template for raw sales tables.
+
+### The nightly job reports an insert/RLS error
+
+Check that the repository's `SUPABASE_SERVICE_ROLE_KEY` Actions Secret contains the current service role key, and that the retrain workflow maps it to the same environment variable. Rerun the workflow after correcting it. Do not fix this by adding the service key to a local env file or by making the sales tables publicly writable.
+
+### Weather advice is missing or stale
+
+Weather is optional. Check that `WEATHER_KEY` is configured and that the API is reachable. The pipeline uses a recent cached forecast when possible and warns when usable weather data is unavailable; forecasting can continue without it.
+
+## Reading forecast metrics
+
+The per-item holdout compares Prophet with a naive forecast that repeats sales from the same weekday in the previous week. The last seven chronological days are held out from Prophet fitting. MAE is the average absolute miss in kilograms; RMSE is also in kilograms and gives larger misses more weight. WAPE is the share of actual sales represented by total absolute error (lower is better and it works when some days have zero sales). Bias is the average `forecast - actual` in kilograms: a positive value indicates over-forecasting; a negative value indicates under-forecasting. `beats_baseline` means Prophet had lower MAE than the naive forecast on that holdout.
+
+Current limits: the 7-day moving-average baseline and per-item production fallback selection are not implemented. Per-item metrics are nested in the history record rather than one CSV row per SKU. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full record shape and known gaps.
+
+## Run locally
+
+From the repository root, install dependencies and run:
+
+```sh
+python -m pip install -r ml_pipeline/requirements-dev.txt
+python -m pytest ml_pipeline/tests -q
+python -m ruff check ml_pipeline
+python ml_pipeline/enrich_data.py
+python ml_pipeline/main.py
 ```
 
-Open the **AI Insights** tab to see the recommendations.
+Or build and run the same pipeline container:
 
----
-
-## 🔧 Common Issues & Fixes
-
-### **Issue: "No AI insights available yet"**
-
-**Cause:** The table exists but is empty, or the query isn't finding data.
-
-**Fix:**
-1. Trigger the **RetailFlow AI** workflow from the GitHub Actions tab
-2. Check Supabase Dashboard that rows were inserted
-3. Verify `created_at` column is recent (within last few minutes)
-
----
-
-### **Issue: Flutter App Crashes When Opening Insights Tab**
-
-**Cause:** Supabase not initialized or anon key is wrong.
-
-**Fix:**
-1. Check that the `--dart-define` flags are correct in your flutter run command
-2. Verify you're using the **publishable key** (not service role key) for Flutter
-3. Check console for error messages: Look for RLS policy denials
-
----
-
-### **Issue: "Error loading insights: 42501 row-level security policy"**
-
-**Cause:** RLS policy doesn't allow anon key to read.
-
-**Fix:**
-1. Run the SQL setup script from `sql/setup_daily_insights_table.sql`
-2. Make sure the SELECT policy for `anon` role exists:
-   ```sql
-   CREATE POLICY "Anyone can read daily insights"
-     ON public.daily_insights
-     FOR SELECT
-     USING (true);
-   ```
-
----
-
-### **Issue: Nightly Job Says "RLS policy for insert"**
-
-**Cause:** Service role key is missing or incorrectly configured.
-
-**Fix:**
-1. In GitHub, open **Settings → Secrets and variables → Actions** for this repository.
-2. Add or update the `SUPABASE_SERVICE_ROLE_KEY` Actions Secret with the current service role key from Supabase.
-3. Confirm the nightly workflow maps that secret to `SUPABASE_SERVICE_ROLE_KEY` and rerun the workflow.
-4. Never put the service role key in `ml_pipeline/.env`, Flutter `--dart-define` values, or any committed file. For local development, use `ml_pipeline/.env.example`; a public key cannot write insights under the hardened policies.
-
----
-
-## 📊 Data Flow Diagram
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    RetailFlow AI Pipeline                     │
-└──────────────────────────────────────────────────────────────┘
-
-1. Raw Sales Data
-   ↓
-2. Python ML Pipeline (main.py)
-   - Basket Analysis → suggested_bundles
-   - Demand Forecasting → stock_advice
-   ↓
-3. Format & Push to Supabase (using Service Role Key)
-   ↓
-4. Supabase Database (daily_insights table)
-   ↓
-5. Flutter App Fetches (using Anon Key) → Displays in UI
+```sh
+docker build -f ml_pipeline/Dockerfile -t retailflow-ml .
+docker run --rm --env-file ml_pipeline/.env retailflow-ml
 ```
 
----
-
-## ✨ Expected Output Format
-
-When the pipeline runs successfully, this JSON is inserted:
-
-```json
-{
-  "forecast_summary": "7-day growth trend looks positive.",
-  "suggested_bundles": [
-    {
-      "pair_1": "Lemon",
-      "pair_2": "Ginger",
-      "confidence": 0.75,
-      "lift": 1.2,
-      "advice": "Customers who buy Lemon often look for Ginger. Consider placing them together."
-    }
-  ],
-  "stock_advice": [
-    {
-      "date": "2026-05-01",
-      "predicted_demand": 45.3,
-      "upper_bound": 52.1,
-      "lower_bound": 38.5
-    }
-  ],
-  "festival_advice": {
-    "is_active": true,
-    "priority": "High",
-    "festival_name": "Buddha Purnima",
-    "title": "Tomorrow is Buddha Purnima",
-    "action": "Stock up on Banana, Apple Washington, Pomegranate today.",
-    "merchandising": "Place these fruits at the front of the shop for faster pickup."
-  }
-}
-```
-
----
-
-## 🚀 Quick Start Checklist
-
-- [ ] SQL table created (`setup_daily_insights_table.sql`)
-- [ ] Service role key stored in GitHub Actions Secrets for the nightly workflow only
-- [ ] Python pipeline runs successfully
-- [ ] Rows visible in Supabase `daily_insights` table
-- [ ] Flutter app displays insights without errors
-
-If you still have issues, check the console output for error messages and let me know! 🔍
+The local env file must contain no service role key.

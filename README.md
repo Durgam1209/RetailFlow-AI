@@ -1,109 +1,100 @@
 # RetailFlow AI
 
-An end-to-end retail intelligence platform for small-scale perishable-goods retailers. It pairs an offline-first Flutter POS app with a Python ML pipeline that ingests sales data, applies weather and holiday-aware feature engineering, and generates demand forecasts and product-bundling recommendations — closing the loop between point-of-sale and inventory decisions.
+RetailFlow AI combines an offline-first Flutter point-of-sale app with a Python pipeline for sales validation, demand forecasting, basket analysis, and daily recommendations for a small fruit shop.
 
 **Live app:** [retail-flow-ai-fb-hosting66.web.app](https://retailflow-ai-fb-hosting66.web.app/)
-**Pipeline status:** ![ML Pipeline](https://github.com/Durgam1209/RetailFlow-AI/actions/workflows/main.yml/badge.svg)
-
----
 
 ## What it does
 
-- **POS app (Flutter):** offline-first checkout that caches transactions locally (Hive) and syncs to Supabase when connectivity returns — built for shop floors with unstable internet.
-- **Analytics dashboard:** real-time revenue, checkout volume, and historical sales views rendered from pre-aggregated Supabase views.
-- **Demand forecasting:** 7-day ahead forecasts using Facebook Prophet, enriched with weather (OpenWeather API) and Indian holiday calendar signals, with a cold-start fallback for new items.
-- **Market basket analysis:** Apriori-based association rule mining (`mlxtend`) surfaces which products are commonly bought together, shown as bundling suggestions.
-- **Automated retraining:** nightly GitHub Actions job re-pulls sales data, retrains models, and logs MAE/RMSE to track forecast drift over time — no manual intervention needed.
+- The Flutter app caches checkout transactions in Hive and syncs them to Supabase when connectivity returns.
+- Supabase stores sales and serves the dashboard's aggregate views and `daily_insights` records.
+- The Python pipeline enriches sales dates with Indian holiday flags, computes basket rules, evaluates item demand forecasts on a chronological holdout, and publishes a schema-validated daily insight.
+- GitHub Actions runs CI, nightly retraining, and Firebase Hosting deployment in separate workflows.
 
-## Screenshots
-
-| POS Checkout | Custom price Edit | Revenue Dashboard |
-|:---:|:---:|:---:|
-| <img src="https://raw.githubusercontent.com/Durgam1209/RetailFlow-AI/main/murali_fruits_ml/assets/images/pos_catalog.png" width="230"/>|<img src= "https://github.com/Durgam1209/RetailFlow-AI/raw/main/murali_fruits_ml/assets/images/mlops_pipeline_log.png" width="230"/> | <img src="https://raw.githubusercontent.com/Durgam1209/RetailFlow-AI/main/murali_fruits_ml/assets/images/analytics_revenue.png" width="230"/> | 
-
-| Demand Forecast | Shop Layout Suggestions | Basket Recommendations |
-|:---:|:---:|:---:|
-| <img src="https://github.com/Durgam1209/RetailFlow-AI/raw/main/murali_fruits_ml/assets/images/ai_predictions.png" width="230"/> |<img src="https://github.com/Durgam1209/RetailFlow-AI/raw/main/murali_fruits_ml/assets/images/shop_layout.png" width="230"/> | <img src="https://github.com/Durgam1209/RetailFlow-AI/raw/main/murali_fruits_ml/assets/images/ai_bundles.png" width="230"/> |
-
-**Pipeline automation:**
-![GitHub Actions Workflow Run]
-*Nightly job provisioning the environment, pulling data, and checking for model drift.*
-
----
-
-## Tech stack
-
-**Frontend:** Flutter (web + mobile), Hive (local storage), `fl_chart`, Firebase Hosting
-**Backend/Data:** Supabase (PostgreSQL), Python, Pandas, NumPy
-**ML:** Facebook Prophet (forecasting), mlxtend (Apriori), `holidays` + OpenWeather API (feature engineering)
-**Automation:** GitHub Actions (nightly cron retraining + CI/CD)
-
-## How it fits together
+## Data flow
 
 ```text
-Storefront (Flutter) → Hive local cache (offline-first)
-        │ syncs on reconnect
-        ▼
-Supabase PostgreSQL (raw transactions)
-        │ nightly GitHub Actions trigger
-        ▼
-Python ETL: joins weather + holiday signals
-        │
-        ▼
-Prophet forecast + Apriori basket rules
-        │ writes to `daily_insights` table
-        ▼
-Dashboard reads latest insights → shop floor UI
+Flutter POS → local Hive queue → Supabase sales_log
+                                  ↓ nightly GitHub Actions
+                   validate sales + holiday context
+                      ↙                     ↘
+                Apriori rules        Prophet / fallback forecast
+                      ↘                     ↙
+                 JSON Schema validation → daily_insights
+                                            ↓
+                                      Flutter dashboard
 ```
 
----
-
-## Repository structure
-
-```text
-RetailFlowAI/
-├── .github/workflows/          # CI/CD: nightly retraining + Firebase deploy
-├── ml_pipeline/
-│   ├── models/
-│   │   ├── basket_analyzer.py  # Apriori association rules
-│   │   └── demand_forecaster.py # Prophet forecasting
-│   ├── enrich_data.py          # weather + holiday feature engineering
-│   ├── main.py                 # pipeline orchestrator
-│   └── logs/performance_history.csv  # MAE/RMSE drift tracking
-├── murali_fruits_ml/            # Flutter app
-│   └── lib/{data,models,widgets}/
-└── sql/                          # Supabase schema + views
-```
-
----
+Weather is optional. The pipeline uses a weather API forecast for weather advice when available; historical weather is not currently merged into the model's training features. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the payload contract and details.
 
 ## Setup
 
-**1. Database:** run `sql/supabase_sales_log.sql` and `sql/setup_daily_insights_table.sql` via the Supabase SQL Editor to create tables and views. Review and apply `sql/harden_rls.sql` after confirming that the public POS insert and aggregate view work with your project.
+1. In Supabase SQL Editor, run `sql/supabase_sales_log.sql` and `sql/setup_daily_insights_table.sql`. Review `sql/harden_rls.sql` for your deployment before applying it.
+2. For local Python runs, copy `ml_pipeline/.env.example` to `ml_pipeline/.env`, then set `SUPABASE_URL`, `SUPABASE_KEY` (publishable or legacy anon key), and optionally `WEATHER_KEY`. **Never place a service role key in a local env file or client build.** The nightly workflow uses the `SUPABASE_SERVICE_ROLE_KEY` GitHub Actions Secret for protected writes.
+3. Configure the Flutter app with its public Supabase URL and publishable key:
 
-**2. ML pipeline:**
-```bash
-cd ml_pipeline
-python -m pip install -r requirements.txt
+   ```sh
+   cd murali_fruits_ml
+   flutter run --dart-define=SUPABASE_URL=https://your-project-id.supabase.co --dart-define=SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+   ```
+
+To run the pipeline locally, from the repository root:
+
+```sh
+python -m pip install -r ml_pipeline/requirements.txt
+python ml_pipeline/enrich_data.py
+python ml_pipeline/main.py
 ```
-Copy `ml_pipeline/.env.example` to `ml_pipeline/.env` and set the Supabase URL and publishable (or legacy anon) key. Keep the service role key only in the `SUPABASE_SERVICE_ROLE_KEY` GitHub Actions Secret used by the nightly workflow; never put it in a local `.env` or a client build. Local pipeline runs using the public key can read permitted data, but only the nightly workflow can write insights.
 
-**3. Flutter app:**
-```bash
+## Forecast metrics
+
+Forecast metrics are calculated per item using the final seven chronological days as a holdout: those dates are excluded from that item's Prophet training data. The comparison is a same-weekday-last-week naive forecast. MAE and RMSE are expressed in kilograms; RMSE penalizes larger misses more. WAPE is total absolute error divided by total actual sales, shown as a percentage; unlike MAPE, it handles zero-sale days. Bias is the average signed error (`forecast - actual`): positive means over-forecasting, negative means under-forecasting. `beats_baseline` compares Prophet and the naive forecast by MAE.
+
+The current evaluator does not yet calculate a 7-day moving-average baseline, choose and serve a per-item baseline forecast, or write all item metrics as separate CSV rows. Item holdout metrics are nested in the run's `item_metrics` JSON field, alongside aggregate run metrics. Regression monitoring uses the configured `METRIC_REGRESSION_THRESHOLD` and the performance history. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for limitations and field definitions.
+
+## Configuration
+
+Copy `.env.example` as described above. Forecast history defaults are 28 calendar days and 7 non-zero days per item; sparse items use a cold-start fallback. `SHOP_CLOSED_DATES` accepts comma-separated `YYYY-MM-DD` dates. Basket defaults require 20 transactions, support count 3, and lift 1.2. `METRIC_REGRESSION_THRESHOLD` defaults to `0.25` (25%); `ML_RANDOM_SEED` defaults to `42`; `PIPELINE_LOG_LEVEL` defaults to `INFO`. Weather and Supabase timeout/retry settings are defined in `ml_pipeline/config.py`.
+
+## Tests and lint
+
+```sh
+python -m pip install -r ml_pipeline/requirements-dev.txt
+python -m pytest ml_pipeline/tests -q
+python -m ruff check ml_pipeline
+```
+
+Flutter checks (with Flutter SDK installed):
+
+```sh
 cd murali_fruits_ml
-flutter run --dart-define=SUPABASE_URL="https://your-project-id.supabase.co" --dart-define=SUPABASE_PUBLISHABLE_KEY="your-publishable-key"
+flutter test
+flutter analyze
 ```
 
-**4. Manual deploy (optional, otherwise handled by CI):**
-```bash
-flutter build web --release --dart-define=SUPABASE_URL="..." --dart-define=SUPABASE_PUBLISHABLE_KEY="..."
-firebase deploy --only hosting
+## Docker
+
+From the repository root, build and run with a configured local env file:
+
+```sh
+docker build -f ml_pipeline/Dockerfile -t retailflow-ml .
+docker run --rm --env-file ml_pipeline/.env retailflow-ml
 ```
 
----
+The container runs enrichment then forecasting/publishing. Keep the service role key out of `.env`; the local public key can only perform actions allowed by RLS.
 
-## Notable design decisions
+## Known limitations
 
-- Aggregations run on the database side (Postgres views) rather than the client, keeping the mobile app lightweight.
-- Every retraining run logs MAE/RMSE to `performance_history.csv` so forecast drift is visible over time, not silent.
-- Dart models use fallback parsing (`??` defaults) to avoid crashes when older cached records don't match the current schema.
+- The app and pipeline assume one store. Multi-location inventory and forecasting are not supported.
+- There are no ERP or external POS integrations; sales enter through this app and its Supabase schema.
+- The sales schema has no explicit return/void marker. Negative quantity or price lines and negative-total transactions are currently excluded from demand and logged as validation warnings; returns cannot be classified independently from voids.
+- Per-item model selection and fallback serving are not implemented yet. Holdout metrics currently compare Prophet against same-weekday-last-week by MAE; they do not select the winning baseline for production forecasts.
+- Weather advice depends on optional external forecast data and may be omitted or marked stale when unavailable.
+
+## Repository map
+
+- `murali_fruits_ml/`: Flutter POS and dashboard.
+- `ml_pipeline/`: Python enrichment, validation, basket analysis, forecasts, tests, configuration, and schema.
+- `sql/`: Supabase setup and security scripts.
+- `.github/workflows/`: CI, nightly retraining, and deployment workflows.
+- `docs/`: architecture, privacy, credentials, and security notes.
