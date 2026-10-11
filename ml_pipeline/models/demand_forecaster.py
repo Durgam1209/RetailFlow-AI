@@ -149,6 +149,22 @@ def _score(actual, predicted):
     }
 
 
+def _newsvendor_quantile(unit_price: float, unit_cost: float) -> float:
+    """Return the cost-derived service quantile used by newsvendor ordering."""
+    if unit_price < 0 or unit_cost < 0:
+        raise ValueError("unit_price and unit_cost must be non-negative")
+    if unit_price + unit_cost == 0:
+        return 0.5
+    return (unit_price - unit_cost) / unit_price if unit_price > unit_cost else 0.0
+
+
+def _time_holdout_split(daily: pd.DataFrame, holdout_days: int):
+    """Split chronologically so the validation tail cannot enter training."""
+    if holdout_days <= 0 or len(daily) <= holdout_days:
+        raise ValueError("holdout_days must be positive and shorter than the series")
+    return daily.iloc[:-holdout_days].copy(), daily.iloc[-holdout_days:].copy()
+
+
 def _evaluate_items(item_frames):
     per_item = {}
     for name, daily in item_frames.items():
@@ -166,8 +182,7 @@ def _evaluate_items(item_frames):
             continue
         if len(daily) <= FORECAST_HOLDOUT_DAYS:
             continue
-        train = daily.iloc[:-FORECAST_HOLDOUT_DAYS]
-        test = daily.iloc[-FORECAST_HOLDOUT_DAYS:]
+        train, test = _time_holdout_split(daily, FORECAST_HOLDOUT_DAYS)
         actual = test["y"].reset_index(drop=True)
         naive = train["y"].iloc[-FORECAST_HOLDOUT_DAYS:].reset_index(drop=True)
         if len(naive) != len(test):

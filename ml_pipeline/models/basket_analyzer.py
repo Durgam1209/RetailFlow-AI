@@ -7,7 +7,6 @@ from config import (
     BASKET_MIN_LIFT,
     BASKET_MIN_SUPPORT_COUNT,
     BASKET_MIN_TRANSACTIONS,
-    MIN_RULE_ITEMSET_SIZE,
 )
 from mlxtend.frequent_patterns import apriori, association_rules
 
@@ -87,12 +86,7 @@ def run_basket_analysis(df: pd.DataFrame) -> pd.DataFrame:
     # Handle case where no frequent itemsets are found
     if len(frequent_itemsets) == 0:
         return empty
-    frequent_itemsets = frequent_itemsets[
-        frequent_itemsets["itemsets"].map(len) >= MIN_RULE_ITEMSET_SIZE
-    ]
-    if frequent_itemsets.empty:
-        return empty
-
+    # Keep singleton supports; association_rules needs them to compute confidence/lift.
     rules = association_rules(frequent_itemsets, metric="lift", min_threshold=min_lift)
 
     # Return empty dataframe if no rules found

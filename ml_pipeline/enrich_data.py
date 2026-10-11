@@ -31,6 +31,30 @@ OPENWEATHER_API_KEY = os.getenv("WEATHER_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
+def add_holiday_flags(frame: pd.DataFrame, calendar=None) -> pd.DataFrame:
+    """Return a copy of sales rows with Indian holiday flags derived from their dates."""
+    result = frame.copy()
+    calendar = calendar if calendar is not None else holidays.India()
+    created_dates = pd.to_datetime(result.get("created_date"), errors="coerce").dt.date
+    result["is_holiday"] = created_dates.map(lambda value: bool(value and value in calendar))
+    return result
+
+
+def merge_weather(frame: pd.DataFrame, weather: pd.DataFrame | None) -> pd.DataFrame:
+    """Left-merge weather observations by date, preserving sales when weather is missing."""
+    result = frame.copy()
+    if weather is None or weather.empty:
+        result["weather_available"] = False
+        return result
+    result["created_date"] = pd.to_datetime(result["created_date"], errors="coerce").dt.date
+    weather = weather.copy()
+    weather["created_date"] = pd.to_datetime(weather["created_date"], errors="coerce").dt.date
+    result = result.merge(weather, on="created_date", how="left", suffixes=("", "_weather"))
+    weather_columns = [column for column in weather.columns if column != "created_date"]
+    result["weather_available"] = result[weather_columns].notna().any(axis=1)
+    return result
+
+
 def main() -> None:
     """Fetch sales, attach known-date holiday context and export the training snapshot."""
     configure_logging()
@@ -44,9 +68,7 @@ def main() -> None:
         return
 
     LOGGER.info("Processing Indian holidays")
-    in_holidays = holidays.India()
-    created_dates = pd.to_datetime(df.get("created_date"), errors="coerce").dt.date
-    df["is_holiday"] = created_dates.map(lambda value: bool(value and value in in_holidays))
+    df = add_holiday_flags(df)
     LOGGER.info("Holiday context added")
 
     if not OPENWEATHER_API_KEY:

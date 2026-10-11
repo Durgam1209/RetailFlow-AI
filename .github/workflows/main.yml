@@ -30,6 +30,9 @@ jobs:
       - name: Lint ML pipeline
         run: python -m ruff check ml_pipeline
 
+      - name: Test ML pipeline
+        run: python -m pytest ml_pipeline/tests
+
       - name: Run Data Enrichment
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

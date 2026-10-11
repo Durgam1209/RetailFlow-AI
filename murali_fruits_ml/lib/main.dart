@@ -9,6 +9,7 @@ import 'data/hive_sales_helper.dart';
 import 'data/supabase_sync_service.dart';
 import 'data/weather_service.dart';
 import 'models/fruit_item.dart';
+import 'utils/checkout_validation.dart';
 import 'widgets/fruit_tile.dart';
 import 'widgets/insights_screen.dart';
 import 'widgets/sales_analytics_screen.dart';
@@ -1659,13 +1660,13 @@ class _ProduceEditorSheetState extends State<_ProduceEditorSheet> {
     final name = _nameController.text.trim();
     final price = double.tryParse(_priceController.text.trim());
 
-    if (name.isEmpty || name.length > 60) {
+    if (!isValidItemName(name)) {
       setState(() {
         _errorText = 'Item name must be between 1 and 60 characters';
       });
       return;
     }
-    if (price == null || !price.isFinite || price <= 0 || price > 100000) {
+    if (!isValidUnitPrice(price)) {
       setState(() {
         _errorText = 'Enter a price above zero and no more than Rs 100,000';
       });
@@ -2171,7 +2172,7 @@ class _WeightEditorSheetState extends State<_WeightEditorSheet> {
         ? null
         : _convertMetricToKgValue(parsed, _selectedMetric);
     if (parsed == null || !parsed.isFinite || parsed < 0 ||
-        quantityKg == null || !quantityKg.isFinite || quantityKg > 500) {
+        !isValidCheckoutQuantity(quantityKg)) {
       setState(() {
         _errorText = 'Enter a weight between 0 and 500 kg';
       });
