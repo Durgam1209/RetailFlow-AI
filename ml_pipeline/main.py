@@ -30,6 +30,7 @@ from config import (
     FESTIVAL_DEMAND_MULTIPLIER,
     FESTIVAL_FRUIT_MAP,
     FESTIVAL_MINIMUM_EXTRA_KG,
+    FORECAST_EXCLUDED_DATES,
     FORECAST_HORIZON_DAYS,
     INSIGHTS_SCHEMA_VERSION,
     MAX_ACTION_FRUIT_NAMES,
@@ -200,6 +201,8 @@ def _item_sales_frame(df):
     for _, sale in df.iterrows():
         sale_date = pd.to_datetime(sale.get("created_date"), errors="coerce")
         if pd.isna(sale_date):
+            continue
+        if sale_date.strftime("%Y-%m-%d") in FORECAST_EXCLUDED_DATES:
             continue
 
         for item in _parse_items(sale.get("items")):

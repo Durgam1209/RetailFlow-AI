@@ -23,6 +23,24 @@ class SupabaseStub:
         return Query(self.rows)
 
 
+def test_excluded_outlier_dates_do_not_enter_revenue_baselines(monkeypatch):
+    monkeypatch.setattr(pipeline, "FORECAST_EXCLUDED_DATES", frozenset({"2026-01-02"}))
+    sales = pd.DataFrame(
+        [
+            {
+                "created_date": day,
+                "items": [{"fruitName": "Banana", "quantityKg": 1, "lineTotal": amount}],
+            }
+            for day, amount in (("2026-01-01", 60), ("2026-01-02", 6000))
+        ]
+    )
+
+    item_sales = pipeline._item_sales_frame(sales)
+
+    assert item_sales["date"].astype(str).tolist() == ["2026-01-01"]
+    assert item_sales["revenue"].tolist() == [60]
+
+
 def test_pipeline_smoke_with_fixture_csv_and_mocked_supabase(tmp_path, monkeypatch):
     items = [{"fruitName": "Banana", "quantityKg": 2.0, "unitPrice": 60}]
     row = {
