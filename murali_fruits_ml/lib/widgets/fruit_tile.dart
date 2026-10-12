@@ -1,3 +1,4 @@
+import '../theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 import '../models/fruit_item.dart';
@@ -33,18 +34,18 @@ class FruitTile extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: hasQuantity 
+        color: hasQuantity
             ? palette.soft.withValues(alpha: 0.4)
             : Colors.white.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: hasQuantity ? palette.primary : const Color(0xFFE5DED3),
+          color: hasQuantity ? palette.primary : RetailPalette.line,
           width: hasQuantity ? 2 : 1,
         ),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: hasQuantity 
-                ? palette.primary.withValues(alpha: 0.15) 
+            color: hasQuantity
+                ? palette.primary.withValues(alpha: 0.15)
                 : Colors.black.withValues(alpha: 0.04),
             blurRadius: hasQuantity ? 20 : 14,
             offset: const Offset(0, 8),
@@ -76,7 +77,7 @@ class FruitTile extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFF1F1B18),
+                          color: RetailPalette.ink,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -107,18 +108,18 @@ class FruitTile extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            
+
             // Details section: Weight, Price, Line Total
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: hasQuantity 
-                    ? Colors.white.withValues(alpha: 0.9) 
-                    : const Color(0xFFF8F4EE),
+                color: hasQuantity
+                    ? Colors.white.withValues(alpha: 0.9)
+                    : RetailPalette.warmSurface,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: const Color(0xFFE5DED3).withValues(alpha: 0.6),
+                  color: RetailPalette.line.withValues(alpha: 0.6),
                 ),
               ),
               child: Column(
@@ -138,22 +139,26 @@ class FruitTile extends StatelessWidget {
                                   Text(
                                     'Weight',
                                     style: TextStyle(
-                                  fontSize: 12,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w700,
-                                      color: Color(0xFF7B6F65),
+                                      color: RetailPalette.mutedLabel,
                                     ),
                                   ),
                                   const SizedBox(width: 3),
-                                  Icon(Icons.edit_rounded, size: 10, color: Color(0xFF7B6F65)),
+                                  Icon(
+                                    Icons.edit_rounded,
+                                    size: 10,
+                                    color: RetailPalette.mutedLabel,
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 _formatQuantity(quantityKg, displayMetric),
                                 style: const TextStyle(
-                                fontSize: 16,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w800,
-                                  color: Color(0xFF1F1B18),
+                                  color: RetailPalette.ink,
                                 ),
                               ),
                             ],
@@ -163,7 +168,7 @@ class FruitTile extends StatelessWidget {
                       Container(
                         height: 24,
                         width: 1,
-                        color: const Color(0xFFE5DED3),
+                        color: RetailPalette.line,
                       ),
                       Expanded(
                         child: GestureDetector(
@@ -181,11 +186,15 @@ class FruitTile extends StatelessWidget {
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,
-                                        color: Color(0xFF7B6F65),
+                                        color: RetailPalette.mutedLabel,
                                       ),
                                     ),
                                     const SizedBox(width: 3),
-                                    Icon(Icons.edit_rounded, size: 10, color: Color(0xFF7B6F65)),
+                                    Icon(
+                                      Icons.edit_rounded,
+                                      size: 10,
+                                      color: RetailPalette.mutedLabel,
+                                    ),
                                   ],
                                 ),
                                 const SizedBox(height: 2),
@@ -194,7 +203,7 @@ class FruitTile extends StatelessWidget {
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w800,
-                                    color: Color(0xFF1F1B18),
+                                    color: RetailPalette.ink,
                                   ),
                                 ),
                               ],
@@ -205,7 +214,7 @@ class FruitTile extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Divider(height: 1, color: const Color(0xFFE5DED3)),
+                  Divider(height: 1, color: RetailPalette.line),
                   const SizedBox(height: 6),
                   // Line Total row
                   Row(
@@ -215,7 +224,7 @@ class FruitTile extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF7B6F65),
+                          color: RetailPalette.mutedLabel,
                         ),
                       ),
                       const Spacer(),
@@ -224,7 +233,9 @@ class FruitTile extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w900,
-                          color: hasQuantity ? palette.primary : const Color(0xFF1F1B18),
+                          color: hasQuantity
+                              ? palette.primary
+                              : RetailPalette.ink,
                         ),
                       ),
                     ],
@@ -233,16 +244,16 @@ class FruitTile extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            
+
             // Action buttons
             Row(
               children: <Widget>[
                 Expanded(
                   child: _ActionButton(
                     label: '−',
-                    backgroundColor: const Color(0xFFF4EFE8),
-                    foregroundColor: const Color(0xFF1F1B18),
-                    borderColor: const Color(0xFFE6DDD1),
+                    backgroundColor: RetailPalette.toneF4EFE8,
+                    foregroundColor: RetailPalette.ink,
+                    borderColor: RetailPalette.toneE6DDD1,
                     onTap: onDecrement,
                   ),
                 ),
@@ -284,42 +295,42 @@ class FruitTile extends StatelessWidget {
       case 'apple_washington':
       case 'pomegranate':
         return const _FruitPalette(
-          soft: Color(0xFFFFEEE8),
-          primary: Color(0xFFC85D42),
+          soft: RetailPalette.toneFFEEE8,
+          primary: RetailPalette.toneC85D42,
         );
       case 'banana_big':
       case 'banana_yelakki':
       case 'papaya':
         return const _FruitPalette(
-          soft: Color(0xFFFFF3D9),
-          primary: Color(0xFFCC8A2E),
+          soft: RetailPalette.toneFFF3D9,
+          primary: RetailPalette.gold,
         );
       case 'orange_citrus':
       case 'orange_mandarin':
       case 'orange_nagpur':
       case 'musambi':
         return const _FruitPalette(
-          soft: Color(0xFFFFF1E1),
-          primary: Color(0xFFCF7A32),
+          soft: RetailPalette.toneFFF1E1,
+          primary: RetailPalette.orange,
         );
       case 'grapes_green':
       case 'grapes_green_seedless':
       case 'watermelon':
       case 'watermelon_kiran':
         return const _FruitPalette(
-          soft: Color(0xFFEAF5E8),
-          primary: Color(0xFF5E8E59),
+          soft: RetailPalette.paleGreen,
+          primary: RetailPalette.tone5E8E59,
         );
       case 'grapes_black':
       case 'grapes_black_seedless':
         return const _FruitPalette(
-          soft: Color(0xFFF0ECF8),
-          primary: Color(0xFF6E5AA5),
+          soft: RetailPalette.toneF0ECF8,
+          primary: RetailPalette.tone6E5AA5,
         );
       default:
         return const _FruitPalette(
-          soft: Color(0xFFF4EFE8),
-          primary: Color(0xFF7B6F65),
+          soft: RetailPalette.toneF4EFE8,
+          primary: RetailPalette.mutedLabel,
         );
     }
   }

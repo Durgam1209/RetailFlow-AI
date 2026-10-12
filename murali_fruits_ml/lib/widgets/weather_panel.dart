@@ -1,3 +1,4 @@
+import '../theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import '../data/weather_service.dart';
 
@@ -25,8 +26,8 @@ class WeatherDisplayPanel extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFF0F382C).withValues(alpha: 0.92),
-            const Color(0xFF1E5140).withValues(alpha: 0.96),
+            RetailPalette.forest.withValues(alpha: 0.92),
+            RetailPalette.darkLeaf.withValues(alpha: 0.96),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -34,7 +35,7 @@ class WeatherDisplayPanel extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F382C).withValues(alpha: 0.25),
+            color: RetailPalette.forest.withValues(alpha: 0.25),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -74,7 +75,7 @@ class WeatherDisplayPanel extends StatelessWidget {
                             children: [
                               const Icon(
                                 Icons.location_on_rounded,
-                                color: Color(0xFF34D399),
+                                color: RetailPalette.mint,
                                 size: 14,
                               ),
                               const SizedBox(width: 4),
@@ -103,11 +104,16 @@ class WeatherDisplayPanel extends StatelessWidget {
                     ],
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.2),
+                      ),
                     ),
                     child: Text(
                       '${todayWeather!.temperature.toStringAsFixed(1)}°C',
@@ -127,14 +133,14 @@ class WeatherDisplayPanel extends StatelessWidget {
                     icon: Icons.water_drop_rounded,
                     label: 'Humidity',
                     value: '${todayWeather!.humidity}%',
-                    accentColor: const Color(0xFF60A5FA),
+                    accentColor: RetailPalette.tone60A5FA,
                   ),
                   const SizedBox(width: 8),
                   _WeatherStatPill(
                     icon: Icons.air_rounded,
                     label: 'Wind',
                     value: '${todayWeather!.windSpeed.toStringAsFixed(1)} m/s',
-                    accentColor: const Color(0xFF34D399),
+                    accentColor: RetailPalette.mint,
                   ),
                   if (weatherService != null) ...[
                     const SizedBox(width: 8),
@@ -142,7 +148,7 @@ class WeatherDisplayPanel extends StatelessWidget {
                       icon: Icons.eco_rounded,
                       label: 'Impact',
                       value: _getImpactSummary(todayWeather!.condition),
-                      accentColor: const Color(0xFFFBBF24),
+                      accentColor: RetailPalette.toneFBBF24,
                     ),
                   ],
                 ],
@@ -181,7 +187,8 @@ class WeatherDisplayPanel extends StatelessWidget {
                   Row(
                     children: [
                       Text(
-                        weatherService?.getWeatherEmoji(tomorrowWeather!) ?? '⛅',
+                        weatherService?.getWeatherEmoji(tomorrowWeather!) ??
+                            '⛅',
                         style: const TextStyle(fontSize: 16),
                       ),
                       const SizedBox(width: 8),
@@ -216,7 +223,9 @@ class WeatherDisplayPanel extends StatelessWidget {
     final lower = condition.toLowerCase();
     if (lower.contains('rain') || lower.contains('drizzle')) {
       return 'High Citrus';
-    } else if (lower.contains('sun') || lower.contains('clear') || lower.contains('hot')) {
+    } else if (lower.contains('sun') ||
+        lower.contains('clear') ||
+        lower.contains('hot')) {
       return 'High Melon';
     } else {
       return 'Steady';
@@ -282,4 +291,3 @@ class _WeatherStatPill extends StatelessWidget {
     );
   }
 }
-

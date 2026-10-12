@@ -1,3 +1,4 @@
+import '../theme/app_theme.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -56,7 +57,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F3EE),
+      backgroundColor: RetailPalette.canvas,
       body: FutureBuilder<Map<String, dynamic>?>(
         future: _insightsFuture,
         builder: (context, snapshot) {
@@ -124,74 +125,80 @@ class _InsightsScreenState extends State<InsightsScreen> {
             );
           }
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              setState(() {
-                _insightsFuture = fetchLatestInsights();
-              });
-              await _insightsFuture;
-            },
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
-              children: <Widget>[
-                _SummaryPanel(
-                  summary: summary,
-                  forecasts: forecasts,
-                  updatedAt: data['created_at'],
-                ),
-                if (_isFestivalAdviceActive(festivalAdvice)) ...<Widget>[
-                  const SizedBox(height: 12),
-                  _FestivalBanner(advice: festivalAdvice),
-                ],
-                if (visibleWeatherAdvice.isNotEmpty) ...<Widget>[
-                  const SizedBox(height: 12),
-                  _WeatherAdviceBanner(advice: visibleWeatherAdvice),
-                ],
-                const SizedBox(height: 18),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      setState(() {
-                        _insightsFuture = fetchLatestInsights();
-                      });
-                      await _insightsFuture;
-                    },
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text(
-                      'Refresh insights',
-                      style: TextStyle(fontWeight: FontWeight.w900),
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1040),
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  setState(() {
+                    _insightsFuture = fetchLatestInsights();
+                  });
+                  await _insightsFuture;
+                },
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+                  children: <Widget>[
+                    _SummaryPanel(
+                      summary: summary,
+                      forecasts: forecasts,
+                      updatedAt: data['created_at'],
                     ),
-                  ),
+                    if (_isFestivalAdviceActive(festivalAdvice)) ...<Widget>[
+                      const SizedBox(height: 12),
+                      _FestivalBanner(advice: festivalAdvice),
+                    ],
+                    if (visibleWeatherAdvice.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 12),
+                      _WeatherAdviceBanner(advice: visibleWeatherAdvice),
+                    ],
+                    const SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          setState(() {
+                            _insightsFuture = fetchLatestInsights();
+                          });
+                          await _insightsFuture;
+                        },
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: const Text(
+                          'Refresh insights',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const _SectionHeader(
+                      title: '7-Day Stock Plan',
+                      subtitle:
+                          'Revenue first, then the exact fruits to prepare.',
+                    ),
+                    const SizedBox(height: 10),
+                    _ForecastList(forecasts: forecasts),
+                    const SizedBox(height: 20),
+                    const _SectionHeader(
+                      title: 'Shop Placement Plan',
+                      subtitle:
+                          'Simple zones based on forecast priorities and basket pairings.',
+                    ),
+                    const SizedBox(height: 10),
+                    _PlacementPlanCard(plan: placementPlan),
+                    const SizedBox(height: 20),
+                    const _SectionHeader(
+                      title: 'Smart Bundles',
+                      subtitle:
+                          'Use these as display and counter-placement actions.',
+                    ),
+                    const SizedBox(height: 10),
+                    _BundleList(
+                      bundles: bundles,
+                      dismissedKeys: _dismissedBundleKeys,
+                      onDismiss: _dismissBundle,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 10),
-                const _SectionHeader(
-                  title: '7-Day Stock Plan',
-                  subtitle: 'Revenue first, then the exact fruits to prepare.',
-                ),
-                const SizedBox(height: 10),
-                _ForecastList(forecasts: forecasts),
-                const SizedBox(height: 20),
-                const _SectionHeader(
-                  title: 'Shop Placement Plan',
-                  subtitle:
-                      'Simple zones based on forecast priorities and basket pairings.',
-                ),
-                const SizedBox(height: 10),
-                _PlacementPlanCard(plan: placementPlan),
-                const SizedBox(height: 20),
-                const _SectionHeader(
-                  title: 'Smart Bundles',
-                  subtitle:
-                      'Use these as display and counter-placement actions.',
-                ),
-                const SizedBox(height: 10),
-                _BundleList(
-                  bundles: bundles,
-                  dismissedKeys: _dismissedBundleKeys,
-                  onDismiss: _dismissBundle,
-                ),
-              ],
+              ),
             ),
           );
         },
@@ -297,14 +304,14 @@ class _SummaryPanel extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [const Color(0xFF0F382C), const Color(0xFF165B46)],
+          colors: [RetailPalette.forest, RetailPalette.leaf],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F382C).withValues(alpha: 0.25),
+            color: RetailPalette.forest.withValues(alpha: 0.25),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -323,12 +330,12 @@ class _SummaryPanel extends StatelessWidget {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFBBF24),
+                  color: RetailPalette.toneFBBF24,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(
                   Icons.auto_graph_rounded,
-                  color: Color(0xFF0F382C),
+                  color: RetailPalette.forest,
                   size: 26,
                 ),
               ),
@@ -343,7 +350,7 @@ class _SummaryPanel extends StatelessWidget {
                           width: 8,
                           height: 8,
                           decoration: const BoxDecoration(
-                            color: Color(0xFF34D399),
+                            color: RetailPalette.mint,
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -351,7 +358,7 @@ class _SummaryPanel extends StatelessWidget {
                         Text(
                           'PROPHET ML PIPELINE ACTIVE',
                           style: TextStyle(
-                            color: const Color(0xFF34D399),
+                            color: RetailPalette.mint,
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.8,
@@ -407,9 +414,9 @@ class _SummaryPanel extends StatelessWidget {
                   Icons.access_time_rounded,
                   size: 13,
                   color: isVeryStale
-                      ? const Color(0xFFFF8A80)
+                      ? RetailPalette.toneFF8A80
                       : isStale
-                      ? const Color(0xFFFFD180)
+                      ? RetailPalette.toneFFD180
                       : Colors.white.withValues(alpha: 0.75),
                 ),
                 const SizedBox(width: 4),
@@ -420,9 +427,9 @@ class _SummaryPanel extends StatelessWidget {
                         : 'Updated ${_formatTimestamp(updatedAt)}',
                     style: TextStyle(
                       color: isVeryStale
-                          ? const Color(0xFFFF8A80)
+                          ? RetailPalette.toneFF8A80
                           : isStale
-                          ? const Color(0xFFFFD180)
+                          ? RetailPalette.toneFFD180
                           : Colors.white.withValues(alpha: 0.85),
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -487,9 +494,9 @@ class _FestivalBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF0BF),
+        color: RetailPalette.paleAmber,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF2E2722), width: 1.5),
+        border: Border.all(color: RetailPalette.charcoal, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -501,7 +508,7 @@ class _FestivalBanner extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2E2722),
+                  color: RetailPalette.charcoal,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
@@ -517,7 +524,7 @@ class _FestivalBanner extends StatelessWidget {
                     const Text(
                       'High Priority',
                       style: TextStyle(
-                        color: Color(0xFF9A5A00),
+                        color: RetailPalette.amber,
                         fontSize: 12,
                         fontWeight: FontWeight.w900,
                       ),
@@ -539,7 +546,7 @@ class _FestivalBanner extends StatelessWidget {
           Text(
             action,
             style: const TextStyle(
-              color: Color(0xFF2E2722),
+              color: RetailPalette.charcoal,
               fontSize: 15,
               fontWeight: FontWeight.w900,
               height: 1.3,
@@ -549,7 +556,7 @@ class _FestivalBanner extends StatelessWidget {
           Text(
             merchandising,
             style: const TextStyle(
-              color: Color(0xFF5E534B),
+              color: RetailPalette.bodyText,
               fontSize: 13,
               fontWeight: FontWeight.w700,
               height: 1.35,
@@ -573,7 +580,7 @@ class _FestivalBanner extends StatelessWidget {
                   child: Text(
                     fruit,
                     style: const TextStyle(
-                      color: Color(0xFF2E2722),
+                      color: RetailPalette.charcoal,
                       fontSize: 12,
                       fontWeight: FontWeight.w900,
                     ),
@@ -586,7 +593,7 @@ class _FestivalBanner extends StatelessWidget {
           Text(
             basis,
             style: const TextStyle(
-              color: Color(0xFF8B8179),
+              color: RetailPalette.subtleText,
               fontSize: 11,
               fontWeight: FontWeight.w800,
             ),
@@ -659,7 +666,7 @@ class _SectionHeader extends StatelessWidget {
         Text(
           subtitle,
           style: const TextStyle(
-            color: Color(0xFF6A5F57),
+            color: RetailPalette.mutedText,
             fontSize: 13,
             fontWeight: FontWeight.w700,
           ),
@@ -691,16 +698,16 @@ class _WeatherAdviceBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F4FF),
+        color: RetailPalette.toneE8F4FF,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFB8D8F2)),
+        border: Border.all(color: RetailPalette.toneB8D8F2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
             children: <Widget>[
-              const Icon(Icons.wb_cloudy_rounded, color: Color(0xFF1769AA)),
+              const Icon(Icons.wb_cloudy_rounded, color: RetailPalette.blue),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -717,7 +724,7 @@ class _WeatherAdviceBanner extends StatelessWidget {
           Text(
             action,
             style: const TextStyle(
-              color: Color(0xFF355165),
+              color: RetailPalette.slateBlue,
               fontWeight: FontWeight.w800,
               height: 1.35,
             ),
@@ -784,7 +791,7 @@ class _ForecastList extends StatelessWidget {
           color: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
-            side: const BorderSide(color: Color(0xFFE1D8CE)),
+            side: const BorderSide(color: RetailPalette.border),
           ),
           child: Padding(
             padding: const EdgeInsets.all(14),
@@ -795,12 +802,12 @@ class _ForecastList extends StatelessWidget {
                   width: 42,
                   height: 42,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE4F5DD),
+                    color: RetailPalette.toneE4F5DD,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
                     Icons.inventory_2_rounded,
-                    color: Color(0xFF2E7D32),
+                    color: RetailPalette.green,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -834,7 +841,7 @@ class _ForecastList extends StatelessWidget {
                       Text(
                         action.toString(),
                         style: const TextStyle(
-                          color: Color(0xFF5E534B),
+                          color: RetailPalette.bodyText,
                           fontWeight: FontWeight.w700,
                           height: 1.35,
                         ),
@@ -844,7 +851,7 @@ class _ForecastList extends StatelessWidget {
                         Text(
                           stockLabel,
                           style: const TextStyle(
-                            color: Color(0xFF8B8179),
+                            color: RetailPalette.subtleText,
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
                           ),
@@ -886,7 +893,7 @@ class _PlacementPlanCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE1D8CE)),
+        border: Border.all(color: RetailPalette.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -939,9 +946,9 @@ class _PlacementZone extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F4EE),
+        color: RetailPalette.warmSurface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE1D8CE)),
+        border: Border.all(color: RetailPalette.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -992,8 +999,8 @@ class _FruitBreakdown extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           decoration: BoxDecoration(
             color: isFestivalPick || isWeatherPick
-                ? const Color(0xFFFFF0BF)
-                : const Color(0xFFF8F4EE),
+                ? RetailPalette.paleAmber
+                : RetailPalette.warmSurface,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -1006,8 +1013,8 @@ class _FruitBreakdown extends StatelessWidget {
                     : Icons.inventory_rounded,
                 size: 17,
                 color: isFestivalPick || isWeatherPick
-                    ? const Color(0xFF9A5A00)
-                    : const Color(0xFF5E534B),
+                    ? RetailPalette.amber
+                    : RetailPalette.bodyText,
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -1017,7 +1024,7 @@ class _FruitBreakdown extends StatelessWidget {
                     Text(
                       'Order about ${_kgLabel(quantity)} $name',
                       style: const TextStyle(
-                        color: Color(0xFF2E2722),
+                        color: RetailPalette.charcoal,
                         fontSize: 13,
                         fontWeight: FontWeight.w900,
                       ),
@@ -1038,7 +1045,7 @@ class _FruitBreakdown extends StatelessWidget {
                 Text(
                   revenue,
                   style: const TextStyle(
-                    color: Color(0xFF5E534B),
+                    color: RetailPalette.bodyText,
                     fontSize: 12,
                     fontWeight: FontWeight.w900,
                   ),
@@ -1070,13 +1077,13 @@ class _EventNote extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF0BF),
+        color: RetailPalette.paleAmber,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         label,
         style: const TextStyle(
-          color: Color(0xFF8B4C00),
+          color: RetailPalette.amberText,
           fontSize: 12,
           fontWeight: FontWeight.w900,
         ),
@@ -1136,7 +1143,7 @@ class _BundleList extends StatelessWidget {
           color: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
-            side: const BorderSide(color: Color(0xFFE1D8CE)),
+            side: const BorderSide(color: RetailPalette.border),
           ),
           child: ListTile(
             contentPadding: const EdgeInsets.symmetric(
@@ -1147,12 +1154,12 @@ class _BundleList extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: const Color(0xFFFFE7BA),
+                color: RetailPalette.toneFFE7BA,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(
                 Icons.add_shopping_cart_rounded,
-                color: Color(0xFF9A5A00),
+                color: RetailPalette.amber,
               ),
             ),
             title: Text(
@@ -1201,13 +1208,13 @@ class _StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F6EA),
+        color: RetailPalette.toneF1F6EA,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         label,
         style: const TextStyle(
-          color: Color(0xFF2F6F37),
+          color: RetailPalette.deepGreen,
           fontSize: 11,
           fontWeight: FontWeight.w900,
         ),
@@ -1234,10 +1241,10 @@ class _EmptyCard extends StatelessWidget {
       color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(color: Color(0xFFE1D8CE)),
+        side: const BorderSide(color: RetailPalette.border),
       ),
       child: ListTile(
-        leading: Icon(icon, color: const Color(0xFF6A5F57)),
+        leading: Icon(icon, color: RetailPalette.mutedText),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
         subtitle: Text(message),
       ),
@@ -1278,7 +1285,7 @@ class _StateMessage extends StatelessWidget {
               message,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: Color(0xFF6A5F57),
+                color: RetailPalette.mutedText,
                 fontWeight: FontWeight.w700,
               ),
             ),

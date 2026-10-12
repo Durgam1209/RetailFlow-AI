@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'theme/app_theme.dart';
 import 'data/hive_sales_helper.dart';
 import 'data/supabase_sync_service.dart';
 import 'data/weather_service.dart';
@@ -14,6 +15,7 @@ import 'utils/checkout_validation.dart';
 import 'widgets/fruit_tile.dart';
 import 'widgets/insights_screen.dart';
 import 'widgets/sales_analytics_screen.dart';
+import 'widgets/sync_status_banner.dart';
 import 'widgets/weather_panel.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -30,7 +32,10 @@ Future<void> main() async {
       defaultValue: String.fromEnvironment('SUPABASE_ANON_KEY'),
     );
     if (supabaseUrl.isNotEmpty && supabasePublishableKey.isNotEmpty) {
-      await Supabase.initialize(url: supabaseUrl, anonKey: supabasePublishableKey);
+      await Supabase.initialize(
+        url: supabaseUrl,
+        anonKey: supabasePublishableKey,
+      );
     }
   } catch (e) {
     debugPrint('Supabase init error: $e');
@@ -93,37 +98,7 @@ class MuraliFruitsApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: shopName,
-      theme: ThemeData(
-        scaffoldBackgroundColor: const Color(0xFFF7F3EE),
-        colorScheme: const ColorScheme.light(
-          primary: Color(0xFF2E2722),
-          secondary: Color(0xFFCC8A2E),
-          surface: Colors.white,
-        ),
-        textTheme: const TextTheme(
-          headlineMedium: TextStyle(
-            fontSize: 30,
-            fontWeight: FontWeight.w800,
-            height: 1,
-            color: Color(0xFF1F1B18),
-          ),
-          titleLarge: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF1F1B18),
-          ),
-          bodyMedium: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF5E534B),
-          ),
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          foregroundColor: Color(0xFF1F1B18),
-          elevation: 0,
-        ),
-      ),
+      theme: RetailAppTheme.light,
       home: SalesHomePage(
         salesHelper: salesHelper,
         syncService: syncService,
@@ -318,11 +293,15 @@ class _SalesHomePageState extends State<SalesHomePage> {
   List<FruitItem> get _visibleCatalog {
     var items = _catalog;
     if (_selectedCategory != 'All') {
-      items = items.where((fruit) => _categoryForFruit(fruit.id) == _selectedCategory).toList();
+      items = items
+          .where((fruit) => _categoryForFruit(fruit.id) == _selectedCategory)
+          .toList();
     }
     if (_searchQuery.trim().isNotEmpty) {
       final query = _searchQuery.trim().toLowerCase();
-      items = items.where((fruit) => fruit.name.toLowerCase().contains(query)).toList();
+      items = items
+          .where((fruit) => fruit.name.toLowerCase().contains(query))
+          .toList();
     }
     return items;
   }
@@ -455,7 +434,7 @@ class _SalesHomePageState extends State<SalesHomePage> {
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFB3261E),
+                backgroundColor: RetailPalette.danger,
                 foregroundColor: Colors.white,
               ),
               child: const Text('Remove'),
@@ -526,11 +505,11 @@ class _SalesHomePageState extends State<SalesHomePage> {
 
   Future<void> _editPrice(FruitItem fruit) async {
     final currentPrice = _priceFor(fruit);
-    final result = await showModalBottomSheet<_PriceEditResult>(
+    final result = await showModalBottomSheet<PriceEditResult>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _PriceEditorSheet(
+      builder: (context) => PriceEditorSheet(
         fruitName: fruit.name,
         currentPrice: currentPrice,
         defaultPrice: fruit.defaultPrice,
@@ -557,11 +536,11 @@ class _SalesHomePageState extends State<SalesHomePage> {
 
   Future<void> _editWeight(FruitItem fruit) async {
     final initialQuantityKg = _quantityFor(fruit);
-    final updatedWeight = await showModalBottomSheet<_WeightEditResult>(
+    final updatedWeight = await showModalBottomSheet<WeightEditResult>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _WeightEditorSheet(
+      builder: (context) => WeightEditorSheet(
         fruitName: fruit.name,
         initialQuantityKg: initialQuantityKg,
         initialMetric: _metricFor(fruit),
@@ -632,7 +611,8 @@ class _SalesHomePageState extends State<SalesHomePage> {
 
   Future<void> _finishTransaction() async {
     final hasItems = _draftItems.values.any(
-      (item) => ((item['quantityKg'] as num?)?.toDouble() ?? 0) > 0 &&
+      (item) =>
+          ((item['quantityKg'] as num?)?.toDouble() ?? 0) > 0 &&
           ((item['lineTotal'] as num?)?.toDouble() ?? 0) > 0,
     );
     if (!hasItems) {
@@ -677,7 +657,8 @@ class _SalesHomePageState extends State<SalesHomePage> {
     );
 
     await Future<void>.delayed(const Duration(seconds: 5));
-    if (mounted && _isOnline &&
+    if (mounted &&
+        _isOnline &&
         widget.salesHelper.getPendingTransactions().any(
           (record) => record['transactionId'] == transactionId,
         )) {
@@ -686,7 +667,9 @@ class _SalesHomePageState extends State<SalesHomePage> {
   }
 
   Future<void> _undoTransaction(String transactionId) async {
-    final restored = await widget.salesHelper.undoPendingTransaction(transactionId);
+    final restored = await widget.salesHelper.undoPendingTransaction(
+      transactionId,
+    );
     if (!mounted) return;
     setState(() {
       _draftItems = widget.salesHelper.loadDraftSession(_catalog);
@@ -694,7 +677,9 @@ class _SalesHomePageState extends State<SalesHomePage> {
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(restored ? 'Sale undone. Bill restored.' : 'Sale already synced.'),
+        content: Text(
+          restored ? 'Sale undone. Bill restored.' : 'Sale already synced.',
+        ),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -781,9 +766,9 @@ class _SalesHomePageState extends State<SalesHomePage> {
             ],
           ),
           bottom: const TabBar(
-            labelColor: Color(0xFF1F1B18),
-            unselectedLabelColor: Color(0xFF6A5F57),
-            indicatorColor: Color(0xFF2E2722),
+            labelColor: RetailPalette.ink,
+            unselectedLabelColor: RetailPalette.mutedText,
+            indicatorColor: RetailPalette.charcoal,
             labelStyle: TextStyle(fontWeight: FontWeight.w800),
             tabs: [
               Tab(icon: Icon(Icons.shopping_cart), text: 'Sales'),
@@ -813,251 +798,285 @@ class _SalesHomePageState extends State<SalesHomePage> {
         children: <Widget>[
           const _Backdrop(),
           SafeArea(
-            child: Column(
-              children: <Widget>[
-                Expanded(
-                  child: RefreshIndicator(
-                    color: const Color(0xFF2E2722),
-                    backgroundColor: Colors.white,
-                    onRefresh: () async {
-                      HapticFeedback.mediumImpact();
-                      _reloadCatalog();
-                      await Future.delayed(const Duration(milliseconds: 300));
-                    },
-                    child: CustomScrollView(
-                      slivers: <Widget>[
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                _HeroHeader(
-                                  todayLabel: _todayLabel,
-                                  statusColor: statusColor,
-                                  statusText: statusText,
-                                  isOnline: _isOnline,
-                                  syncActionLabel: _syncActionLabel(),
-                                  onSyncTap:
-                                      widget.syncService.isConfigured &&
-                                          !_isSyncing
-                                      ? _retryPendingSync
-                                      : null,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1320),
+                child: Column(
+                  children: <Widget>[
+                    Expanded(
+                      child: RefreshIndicator(
+                        color: RetailPalette.charcoal,
+                        backgroundColor: Colors.white,
+                        onRefresh: () async {
+                          HapticFeedback.mediumImpact();
+                          _reloadCatalog();
+                          await Future.delayed(
+                            const Duration(milliseconds: 300),
+                          );
+                        },
+                        child: CustomScrollView(
+                          slivers: <Widget>[
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  16,
+                                  20,
+                                  12,
                                 ),
-                                const SizedBox(height: 14),
-                                WeatherDisplayPanel(
-                                  todayWeather: _todayWeather,
-                                  tomorrowWeather: _tomorrowWeather,
-                                  weatherService: widget.weatherService,
-                                ),
-                                const SizedBox(height: 14),
-                                const SizedBox(height: 8),
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.92),
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(
-                                      color: Colors.black,
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  child: TextField(
-                                    controller: _searchController,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _searchQuery = value;
-                                      });
-                                    },
-                                    decoration: const InputDecoration(
-                                      hintText: 'Search produce',
-                                      prefixIcon: Icon(Icons.search_rounded),
-                                      border: InputBorder.none,
-                                      contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 14,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                SizedBox(
-                                  height: 40,
-                                  child: ListView.separated(
-                                    scrollDirection: Axis.horizontal,
-                                    itemCount: _categories.length,
-                                    separatorBuilder: (context, index) => const SizedBox(width: 8),
-                                    itemBuilder: (context, index) {
-                                      final cat = _categories[index];
-                                      final isSelected = cat == _selectedCategory;
-                                      return ChoiceChip(
-                                        label: Text(cat),
-                                        selected: isSelected,
-                                        selectedColor: const Color(0xFF0F382C),
-                                        backgroundColor: Colors.white.withValues(alpha: 0.9),
-                                        labelStyle: TextStyle(
-                                          color: isSelected ? Colors.white : const Color(0xFF1F1B18),
-                                          fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
-                                          fontSize: 13,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                          side: BorderSide(
-                                            color: isSelected ? const Color(0xFF0F382C) : const Color(0xFFE5DED3),
-                                          ),
-                                        ),
-                                        showCheckmark: false,
-                                        onSelected: (selected) {
-                                          if (selected) {
-                                            setState(() {
-                                              _selectedCategory = cat;
-                                            });
-                                          }
-                                        },
-                                      );
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(height: 18),
-                                Row(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
-                                    const Expanded(
-                                      child: Text(
-                                        'Produce Counter',
-                                        style: TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
+                                    _HeroHeader(
+                                      todayLabel: _todayLabel,
+                                      statusColor: statusColor,
+                                      statusText: statusText,
+                                      isOnline: _isOnline,
+                                      syncActionLabel: _syncActionLabel(),
+                                      onSyncTap:
+                                          widget.syncService.isConfigured &&
+                                              !_isSyncing
+                                          ? _retryPendingSync
+                                          : null,
                                     ),
-                                    OutlinedButton.icon(
-                                      onPressed: _openManageProducts,
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: Colors.black,
-                                        side: const BorderSide(
+                                    const SizedBox(height: 14),
+                                    WeatherDisplayPanel(
+                                      todayWeather: _todayWeather,
+                                      tomorrowWeather: _tomorrowWeather,
+                                      weatherService: widget.weatherService,
+                                    ),
+                                    const SizedBox(height: 14),
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.92,
+                                        ),
+                                        borderRadius: BorderRadius.circular(18),
+                                        border: Border.all(
                                           color: Colors.black,
                                           width: 1.5,
                                         ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 12,
+                                      ),
+                                      child: TextField(
+                                        controller: _searchController,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _searchQuery = value;
+                                          });
+                                        },
+                                        decoration: const InputDecoration(
+                                          hintText: 'Search produce',
+                                          prefixIcon: Icon(
+                                            Icons.search_rounded,
+                                          ),
+                                          border: InputBorder.none,
+                                          contentPadding: EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 14,
+                                          ),
                                         ),
                                       ),
-                                      icon: const Icon(
-                                        Icons.tune_rounded,
-                                        size: 18,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      height: 40,
+                                      child: ListView.separated(
+                                        scrollDirection: Axis.horizontal,
+                                        itemCount: _categories.length,
+                                        separatorBuilder: (context, index) =>
+                                            const SizedBox(width: 8),
+                                        itemBuilder: (context, index) {
+                                          final cat = _categories[index];
+                                          final isSelected =
+                                              cat == _selectedCategory;
+                                          return ChoiceChip(
+                                            label: Text(cat),
+                                            selected: isSelected,
+                                            selectedColor: RetailPalette.forest,
+                                            backgroundColor: Colors.white
+                                                .withValues(alpha: 0.9),
+                                            labelStyle: TextStyle(
+                                              color: isSelected
+                                                  ? Colors.white
+                                                  : RetailPalette.ink,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.w900
+                                                  : FontWeight.w700,
+                                              fontSize: 13,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                              side: BorderSide(
+                                                color: isSelected
+                                                    ? RetailPalette.forest
+                                                    : RetailPalette.line,
+                                              ),
+                                            ),
+                                            showCheckmark: false,
+                                            onSelected: (selected) {
+                                              if (selected) {
+                                                setState(() {
+                                                  _selectedCategory = cat;
+                                                });
+                                              }
+                                            },
+                                          );
+                                        },
                                       ),
-                                      label: const Text(
-                                        'Manage',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w900,
+                                    ),
+                                    const SizedBox(height: 18),
+                                    Row(
+                                      children: <Widget>[
+                                        const Expanded(
+                                          child: Text(
+                                            'Produce Counter',
+                                            style: TextStyle(
+                                              fontSize: 22,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
                                         ),
-                                      ),
+                                        OutlinedButton.icon(
+                                          onPressed: _openManageProducts,
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor: Colors.black,
+                                            side: const BorderSide(
+                                              color: Colors.black,
+                                              width: 1.5,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 12,
+                                            ),
+                                          ),
+                                          icon: const Icon(
+                                            Icons.tune_rounded,
+                                            size: 18,
+                                          ),
+                                          label: const Text(
+                                            'Manage',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 14),
+                                    _CurrentBillPanel(
+                                      items: _draftCatalogItems,
+                                      totalQuantity: _totalQuantity,
+                                      totalAmount: _totalAmount,
+                                      quantityFor: _quantityFor,
+                                      metricFor: _metricFor,
+                                      lineTotalFor: _lineTotalFor,
+                                      onEditWeight: _editWeight,
+                                      onEditPrice: _editPrice,
+                                      onRemoveLine: _removeDraftLine,
+                                      onClearAll: _draftCatalogItems.isEmpty
+                                          ? null
+                                          : _clearCurrentBill,
+                                      onUndoLastItem: _draftCatalogItems.isEmpty
+                                          ? null
+                                          : _undoLastItem,
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 14),
-                                _CurrentBillPanel(
-                                  items: _draftCatalogItems,
-                                  totalQuantity: _totalQuantity,
-                                  totalAmount: _totalAmount,
-                                  quantityFor: _quantityFor,
-                                  metricFor: _metricFor,
-                                  lineTotalFor: _lineTotalFor,
-                                  onEditWeight: _editWeight,
-                                  onEditPrice: _editPrice,
-                                  onRemoveLine: _removeDraftLine,
-                                  onClearAll: _draftCatalogItems.isEmpty
-                                      ? null
-                                      : _clearCurrentBill,
-                      onUndoLastItem: _draftCatalogItems.isEmpty
-                          ? null
-                          : _undoLastItem,
-                                ),
-                              ],
+                              ),
+                            ),
+                            SliverLayoutBuilder(
+                              builder: (context, constraints) {
+                                final width = constraints.crossAxisExtent;
+                                final crossAxisCount = width < 430
+                                    ? 1
+                                    : width < 900
+                                    ? 2
+                                    : 3;
+                                final childAspectRatio = crossAxisCount == 1
+                                    ? 1.1
+                                    : crossAxisCount == 2
+                                    ? 1.3
+                                    : 1.1;
+
+                                return SliverPadding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    4,
+                                    20,
+                                    48,
+                                  ),
+                                  sliver: SliverGrid(
+                                    gridDelegate:
+                                        SliverGridDelegateWithFixedCrossAxisCount(
+                                          crossAxisCount: crossAxisCount,
+                                          mainAxisSpacing: 16,
+                                          crossAxisSpacing: 16,
+                                          childAspectRatio: childAspectRatio,
+                                        ),
+                                    delegate: SliverChildBuilderDelegate((
+                                      context,
+                                      index,
+                                    ) {
+                                      final fruit = _visibleCatalog[index];
+                                      return FruitTile(
+                                        fruit: fruit,
+                                        quantityKg: _quantityFor(fruit),
+                                        displayMetric: _metricFor(fruit),
+                                        unitPrice: _priceFor(fruit),
+                                        lineTotal: _lineTotalFor(fruit),
+                                        onEditWeight: () => _editWeight(fruit),
+                                        onIncrement: () => _incrementFruit(
+                                          fruit,
+                                          fruit.defaultIncrement,
+                                        ),
+                                        onDecrement: () =>
+                                            _decrementFruit(fruit),
+                                        onEditPrice: () => _editPrice(fruit),
+                                      );
+                                    }, childCount: _visibleCatalog.length),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: FilledButton.icon(
+                          onPressed:
+                              _draftCatalogItems.isEmpty || _totalAmount <= 0
+                              ? null
+                              : _finishTransaction,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: RetailPalette.charcoal,
+                            disabledBackgroundColor: RetailPalette.disabled,
+                            foregroundColor: Colors.white,
+                            textStyle: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
                             ),
                           ),
-                        ),
-                        SliverLayoutBuilder(
-                          builder: (context, constraints) {
-                            final width = constraints.crossAxisExtent;
-                            final crossAxisCount = width < 430
-                                ? 1
-                                : width < 900
-                                ? 2
-                                : 3;
-                            final childAspectRatio = crossAxisCount == 1
-                                ? 1.1
-                                : crossAxisCount == 2
-                                ? 1.3
-                                : 1.1;
-
-                            return SliverPadding(
-                              padding: const EdgeInsets.fromLTRB(20, 4, 20, 48),
-                              sliver: SliverGrid(
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: crossAxisCount,
-                                      mainAxisSpacing: 16,
-                                      crossAxisSpacing: 16,
-                                      childAspectRatio: childAspectRatio,
-                                    ),
-                                delegate: SliverChildBuilderDelegate((
-                                  context,
-                                  index,
-                                ) {
-                                  final fruit = _visibleCatalog[index];
-                                  return FruitTile(
-                                    fruit: fruit,
-                                    quantityKg: _quantityFor(fruit),
-                                    displayMetric: _metricFor(fruit),
-                                    unitPrice: _priceFor(fruit),
-                                    lineTotal: _lineTotalFor(fruit),
-                                    onEditWeight: () => _editWeight(fruit),
-                                    onIncrement: () => _incrementFruit(
-                                      fruit,
-                                      fruit.defaultIncrement,
-                                    ),
-                                    onDecrement: () => _decrementFruit(fruit),
-                                    onEditPrice: () => _editPrice(fruit),
-                                  );
-                                }, childCount: _visibleCatalog.length),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: FilledButton.icon(
-                      onPressed: _draftCatalogItems.isEmpty || _totalAmount <= 0
-                          ? null
-                          : _finishTransaction,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF2E2722),
-                        disabledBackgroundColor: const Color(0xFF716860),
-                        foregroundColor: Colors.white,
-                        textStyle: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
+                          icon: const Icon(Icons.receipt_long, size: 24),
+                          label: Text(
+                            'Finish Transaction · Rs ${_totalAmount.toStringAsFixed(2)}',
+                          ),
                         ),
                       ),
-                      icon: const Icon(Icons.receipt_long, size: 24),
-                      label: Text(
-                        'Finish Transaction · Rs ${_totalAmount.toStringAsFixed(2)}',
-                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ],
@@ -1072,15 +1091,15 @@ extension on _SalesHomePageState {
       return Colors.black54;
     }
     if (_isSyncing) {
-      return const Color(0xFFC46005);
+      return RetailPalette.warning;
     }
     if (!_isOnline) {
       return Colors.black54;
     }
     if (_pendingSyncCount > 0) {
-      return const Color(0xFFC46005);
+      return RetailPalette.warning;
     }
-    return const Color(0xFF117A37);
+    return RetailPalette.success;
   }
 
   String _statusText() {
@@ -1182,7 +1201,7 @@ class _CurrentBillPanel extends StatelessWidget {
             const Text(
               'No items added yet. Tap produce below to start the bill.',
               style: TextStyle(
-                color: Color(0xFF6A5F57),
+                color: RetailPalette.mutedText,
                 fontWeight: FontWeight.w700,
               ),
             )
@@ -1198,14 +1217,14 @@ class _CurrentBillPanel extends StatelessWidget {
                   margin: const EdgeInsets.only(top: 10),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8F4EE),
+                    color: RetailPalette.warmSurface,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
                     children: <Widget>[
                       _MiniProduceIcon(
                         icon: fruit.icon,
-                        tint: const Color(0xFFFFF1D9),
+                        tint: RetailPalette.paleGold,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -1223,7 +1242,7 @@ class _CurrentBillPanel extends StatelessWidget {
                             Text(
                               '$quantityLabel • Rs ${lineTotalFor(fruit).toStringAsFixed(0)}',
                               style: const TextStyle(
-                                color: Color(0xFF6A5F57),
+                                color: RetailPalette.mutedText,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -1285,7 +1304,7 @@ class _BillMetric extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFCF7),
+        color: RetailPalette.toneFFFCF7,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -1296,7 +1315,7 @@ class _BillMetric extends StatelessWidget {
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF6A5F57),
+              color: RetailPalette.mutedText,
             ),
           ),
           const SizedBox(height: 6),
@@ -1366,7 +1385,7 @@ class _ManageProductsSheet extends StatelessWidget {
             const Text(
               'Add new produce here and remove old catalog items away from the live sales screen.',
               style: TextStyle(
-                color: Color(0xFF6A5F57),
+                color: RetailPalette.mutedText,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -1383,14 +1402,14 @@ class _ManageProductsSheet extends StatelessWidget {
                       vertical: 10,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8F4EE),
+                      color: RetailPalette.warmSurface,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
                       children: <Widget>[
                         _MiniProduceIcon(
                           icon: fruit.icon,
-                          tint: const Color(0xFFFFF1D9),
+                          tint: RetailPalette.paleGold,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -1408,7 +1427,7 @@ class _ManageProductsSheet extends StatelessWidget {
                               Text(
                                 'Rs ${fruit.defaultPrice.toStringAsFixed(0)} / kg • ${_formatMetricLabelValue(fruit.defaultIncrement, 'kg')} per tap',
                                 style: const TextStyle(
-                                  color: Color(0xFF6A5F57),
+                                  color: RetailPalette.mutedText,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -1447,9 +1466,9 @@ class _Backdrop extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: <Color>[
-            Color(0xFFF8F4EE),
-            Color(0xFFF5EFE6),
-            Color(0xFFFAF8F4),
+            RetailPalette.warmSurface,
+            RetailPalette.toneF5EFE6,
+            RetailPalette.toneFAF8F4,
           ],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
@@ -1467,7 +1486,7 @@ class _Backdrop extends StatelessWidget {
               width: 120,
               height: 120,
               decoration: BoxDecoration(
-                color: const Color(0xFFFFFFFF).withValues(alpha: 0.45),
+                color: RetailPalette.white.withValues(alpha: 0.45),
                 borderRadius: BorderRadius.circular(32),
               ),
             ),
@@ -1479,7 +1498,7 @@ class _Backdrop extends StatelessWidget {
               width: 88,
               height: 88,
               decoration: BoxDecoration(
-                color: const Color(0xFFFFE8CC).withValues(alpha: 0.55),
+                color: RetailPalette.toneFFE8CC.withValues(alpha: 0.55),
                 borderRadius: BorderRadius.circular(28),
               ),
             ),
@@ -1491,7 +1510,7 @@ class _Backdrop extends StatelessWidget {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: const Color(0xFFE7F1E3).withValues(alpha: 0.7),
+                color: RetailPalette.toneE7F1E3.withValues(alpha: 0.7),
                 borderRadius: BorderRadius.circular(22),
               ),
             ),
@@ -1526,7 +1545,7 @@ class _HeroHeader extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE7DED2)),
+        border: Border.all(color: RetailPalette.softBorder),
       ),
       child: Wrap(
         alignment: WrapAlignment.spaceBetween,
@@ -1541,13 +1560,13 @@ class _HeroHeader extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF4EFE8),
+                  color: RetailPalette.toneF4EFE8,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
                   Icons.storefront_rounded,
                   size: 23,
-                  color: Color(0xFF2E2722),
+                  color: RetailPalette.charcoal,
                 ),
               ),
               const SizedBox(width: 10),
@@ -1566,53 +1585,19 @@ class _HeroHeader extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF5E534B),
+                      color: RetailPalette.bodyText,
                     ),
                   ),
                 ],
               ),
             ],
           ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Container(
-                constraints: const BoxConstraints(maxWidth: 250),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8F4EE),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: statusColor.withValues(alpha: 0.35)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Icon(
-                      isOnline ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
-                      color: statusColor,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        statusText,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (syncActionLabel != null) ...<Widget>[
-                const SizedBox(width: 4),
-                TextButton(
-                  onPressed: onSyncTap,
-                  style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
-                  child: Text(syncActionLabel!),
-                ),
-              ],
-            ],
+          SyncStatusBanner(
+            label: statusText,
+            statusColor: statusColor,
+            isOnline: isOnline,
+            actionLabel: syncActionLabel,
+            onRetry: onSyncTap,
           ),
         ],
       ),
@@ -1747,13 +1732,13 @@ class _ProduceEditorSheetState extends State<_ProduceEditorSheet> {
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? const Color(0xFFFFE2B8)
-                              : const Color(0xFFFFF6EA),
+                              ? RetailPalette.toneFFE2B8
+                              : RetailPalette.toneFFF6EA,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isSelected
                                 ? Colors.black
-                                : const Color(0xFFE6DDD1),
+                                : RetailPalette.toneE6DDD1,
                             width: isSelected ? 2 : 1,
                           ),
                         ),
@@ -1772,7 +1757,7 @@ class _ProduceEditorSheetState extends State<_ProduceEditorSheet> {
                     hintText: 'Example: Mango Alphonso',
                     errorText: _errorText,
                     filled: true,
-                    fillColor: const Color(0xFFFFFCF7),
+                    fillColor: RetailPalette.toneFFFCF7,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(18),
                     ),
@@ -1800,7 +1785,7 @@ class _ProduceEditorSheetState extends State<_ProduceEditorSheet> {
                     labelText: 'Default price per kg',
                     prefixText: 'Rs ',
                     filled: true,
-                    fillColor: const Color(0xFFFFFCF7),
+                    fillColor: RetailPalette.toneFFFCF7,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(18),
                     ),
@@ -1826,7 +1811,7 @@ class _ProduceEditorSheetState extends State<_ProduceEditorSheet> {
                       selected: isSelected,
                       side: const BorderSide(color: Colors.black, width: 1.5),
                       selectedColor: Colors.black,
-                      backgroundColor: const Color(0xFFFFF6EA),
+                      backgroundColor: RetailPalette.toneFFF6EA,
                       labelStyle: TextStyle(
                         color: isSelected ? Colors.white : Colors.black,
                       ),
@@ -1870,8 +1855,9 @@ class _ProduceEditorSheetState extends State<_ProduceEditorSheet> {
   }
 }
 
-class _PriceEditorSheet extends StatefulWidget {
-  const _PriceEditorSheet({
+class PriceEditorSheet extends StatefulWidget {
+  const PriceEditorSheet({
+    super.key,
     required this.fruitName,
     required this.currentPrice,
     required this.defaultPrice,
@@ -1882,19 +1868,18 @@ class _PriceEditorSheet extends StatefulWidget {
   final double defaultPrice;
 
   @override
-  State<_PriceEditorSheet> createState() => _PriceEditorSheetState();
+  State<PriceEditorSheet> createState() => PriceEditorSheetState();
 }
 
-class _PriceEditorSheetState extends State<_PriceEditorSheet> {
+class PriceEditorSheetState extends State<PriceEditorSheet> {
   late final TextEditingController _controller;
   late final FocusNode _priceFocusNode;
   String? _errorText;
   bool _saveAsDefault = false;
   bool _largeChangeConfirmed = false;
 
-  double get _usualPrice => widget.defaultPrice > 0
-      ? widget.defaultPrice
-      : widget.currentPrice;
+  double get _usualPrice =>
+      widget.defaultPrice > 0 ? widget.defaultPrice : widget.currentPrice;
 
   double? get _largeChangePercent {
     final value = double.tryParse(_controller.text.trim());
@@ -1967,7 +1952,7 @@ class _PriceEditorSheetState extends State<_PriceEditorSheet> {
 
     FocusManager.instance.primaryFocus?.unfocus();
     Navigator.of(context).pop(
-      _PriceEditResult(
+      PriceEditResult(
         price: _roundCurrencyValue(parsed),
         saveAsDefault: _saveAsDefault,
       ),
@@ -2030,7 +2015,7 @@ class _PriceEditorSheetState extends State<_PriceEditorSheet> {
                       'Current price · Rs ${_formatEditableNumberValue(widget.currentPrice)}',
                       style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
-                    backgroundColor: const Color(0xFFFFF1D9),
+                    backgroundColor: RetailPalette.paleGold,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -2056,8 +2041,8 @@ class _PriceEditorSheetState extends State<_PriceEditorSheet> {
                           side: const BorderSide(color: Colors.black, width: 2),
                           foregroundColor: Colors.black,
                           backgroundColor: isCurrent
-                              ? const Color(0xFFFFE2B8)
-                              : const Color(0xFFFFF6EA),
+                              ? RetailPalette.toneFFE2B8
+                              : RetailPalette.toneFFF6EA,
                         ),
                         child: Text(
                           'Rs ${_formatEditableNumberValue(price)}',
@@ -2096,7 +2081,7 @@ class _PriceEditorSheetState extends State<_PriceEditorSheet> {
                     helperText: 'Example: 120 or 120.50',
                     errorText: _errorText,
                     filled: true,
-                    fillColor: const Color(0xFFFFFCF7),
+                    fillColor: RetailPalette.toneFFFCF7,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(18),
                     ),
@@ -2110,8 +2095,8 @@ class _PriceEditorSheetState extends State<_PriceEditorSheet> {
                         : '${_largeChangeMessage!}. Tap Save once to review, then again to confirm.',
                     style: TextStyle(
                       color: _largeChangeConfirmed
-                          ? const Color(0xFF9A5A00)
-                          : const Color(0xFF8A3B12),
+                          ? RetailPalette.amber
+                          : RetailPalette.warningText,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -2170,8 +2155,8 @@ class _PriceEditorSheetState extends State<_PriceEditorSheet> {
   }
 }
 
-class _WeightEditResult {
-  const _WeightEditResult({
+class WeightEditResult {
+  const WeightEditResult({
     required this.quantityKg,
     required this.displayMetric,
   });
@@ -2180,8 +2165,8 @@ class _WeightEditResult {
   final String displayMetric;
 }
 
-class _PriceEditResult {
-  const _PriceEditResult({required this.price, required this.saveAsDefault});
+class PriceEditResult {
+  const PriceEditResult({required this.price, required this.saveAsDefault});
 
   final double price;
   final bool saveAsDefault;
@@ -2204,8 +2189,9 @@ String _uniqueProduceId(String name, Set<String> existingIds) {
   return candidate;
 }
 
-class _WeightEditorSheet extends StatefulWidget {
-  const _WeightEditorSheet({
+class WeightEditorSheet extends StatefulWidget {
+  const WeightEditorSheet({
+    super.key,
     required this.fruitName,
     required this.initialQuantityKg,
     required this.initialMetric,
@@ -2218,10 +2204,10 @@ class _WeightEditorSheet extends StatefulWidget {
   final double defaultIncrement;
 
   @override
-  State<_WeightEditorSheet> createState() => _WeightEditorSheetState();
+  State<WeightEditorSheet> createState() => WeightEditorSheetState();
 }
 
-class _WeightEditorSheetState extends State<_WeightEditorSheet> {
+class WeightEditorSheetState extends State<WeightEditorSheet> {
   late final TextEditingController _controller;
   late String _selectedMetric;
   String? _errorText;
@@ -2283,10 +2269,7 @@ class _WeightEditorSheetState extends State<_WeightEditorSheet> {
 
     FocusManager.instance.primaryFocus?.unfocus();
     Navigator.of(context).pop(
-      _WeightEditResult(
-        quantityKg: quantityKg,
-        displayMetric: _selectedMetric,
-      ),
+      WeightEditResult(quantityKg: quantityKg, displayMetric: _selectedMetric),
     );
   }
 
@@ -2349,7 +2332,7 @@ class _WeightEditorSheetState extends State<_WeightEditorSheet> {
                         color: isSelected ? Colors.white : Colors.black,
                       ),
                       side: const BorderSide(color: Colors.black, width: 2),
-                      backgroundColor: const Color(0xFFFFF6EA),
+                      backgroundColor: RetailPalette.toneFFF6EA,
                       selectedColor: Colors.black,
                       onSelected: (_) => _switchMetric(metric),
                     );
@@ -2364,7 +2347,7 @@ class _WeightEditorSheetState extends State<_WeightEditorSheet> {
                       height: 54,
                       child: OutlinedButton(
                         onPressed: () => Navigator.of(context).pop(
-                          _WeightEditResult(
+                          WeightEditResult(
                             quantityKg: weight == 0
                                 ? 0
                                 : _convertMetricToKgValue(
@@ -2377,7 +2360,7 @@ class _WeightEditorSheetState extends State<_WeightEditorSheet> {
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: Colors.black, width: 2),
                           foregroundColor: Colors.black,
-                          backgroundColor: const Color(0xFFFFF6EA),
+                          backgroundColor: RetailPalette.toneFFF6EA,
                         ),
                         child: Text(
                           weight == 0
@@ -2421,7 +2404,7 @@ class _WeightEditorSheetState extends State<_WeightEditorSheet> {
                     suffixText: _selectedMetric,
                     errorText: _errorText,
                     filled: true,
-                    fillColor: const Color(0xFFFFFCF7),
+                    fillColor: RetailPalette.toneFFFCF7,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(18),
                     ),
@@ -2514,4 +2497,3 @@ class _MiniProduceIcon extends StatelessWidget {
     );
   }
 }
-

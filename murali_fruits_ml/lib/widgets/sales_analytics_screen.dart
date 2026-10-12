@@ -1,3 +1,4 @@
+import '../theme/app_theme.dart';
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
@@ -238,9 +239,9 @@ class _SalesAnalyticsScreenState extends State<SalesAnalyticsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F3EE),
+      backgroundColor: RetailPalette.canvas,
       body: RefreshIndicator(
-        color: const Color(0xFF2E2722),
+        color: RetailPalette.charcoal,
         onRefresh: () async {
           setState(() {
             _summaryFuture = _fetchAnalyticsData();
@@ -274,56 +275,64 @@ class _SalesAnalyticsScreenState extends State<SalesAnalyticsScreen> {
             }
             final data = _selectRange(payload);
 
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
-              children: <Widget>[
-                _AnalyticsHeader(data: data),
-                const SizedBox(height: 14),
-                SegmentedButton<_DateRange>(
-                  segments: const <ButtonSegment<_DateRange>>[
-                    ButtonSegment(
-                      value: _DateRange.sevenDays,
-                      label: Text('7 days'),
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1120),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+                  children: <Widget>[
+                    _AnalyticsHeader(data: data),
+                    const SizedBox(height: 14),
+                    SegmentedButton<_DateRange>(
+                      segments: const <ButtonSegment<_DateRange>>[
+                        ButtonSegment(
+                          value: _DateRange.sevenDays,
+                          label: Text('7 days'),
+                        ),
+                        ButtonSegment(
+                          value: _DateRange.thirtyDays,
+                          label: Text('30 days'),
+                        ),
+                        ButtonSegment(
+                          value: _DateRange.all,
+                          label: Text('All'),
+                        ),
+                      ],
+                      selected: <_DateRange>{_selectedRange},
+                      onSelectionChanged: (selection) => setState(() {
+                        _selectedRange = selection.first;
+                      }),
                     ),
-                    ButtonSegment(
-                      value: _DateRange.thirtyDays,
-                      label: Text('30 days'),
+                    const SizedBox(height: 14),
+                    _SummaryCards(data: data),
+                    const SizedBox(height: 18),
+                    _ChartPanel(
+                      title: 'Daily Revenue',
+                      subtitle:
+                          'Calendar days include days without recorded sales.',
+                      child: _RevenueChart(data: data.current),
                     ),
-                    ButtonSegment(value: _DateRange.all, label: Text('All')),
+                    const SizedBox(height: 16),
+                    _ChartPanel(
+                      title: 'Transactions Per Day',
+                      subtitle: 'Shows when customer flow is strongest.',
+                      child: _TransactionChart(data: data.current),
+                    ),
+                    const SizedBox(height: 16),
+                    _ChartPanel(
+                      title: 'Top 5 Items by Revenue',
+                      subtitle: 'Item totals for the selected date range.',
+                      child: _TopItems(data: data.itemRevenue),
+                    ),
+                    const SizedBox(height: 16),
+                    _ChartPanel(
+                      title: 'Sales by Hour',
+                      subtitle: 'Transaction revenue grouped by hour.',
+                      child: _HourlySales(data: data.hourlySales),
+                    ),
                   ],
-                  selected: <_DateRange>{_selectedRange},
-                  onSelectionChanged: (selection) => setState(() {
-                    _selectedRange = selection.first;
-                  }),
                 ),
-                const SizedBox(height: 14),
-                _SummaryCards(data: data),
-                const SizedBox(height: 18),
-                _ChartPanel(
-                  title: 'Daily Revenue',
-                  subtitle:
-                      'Calendar days include days without recorded sales.',
-                  child: _RevenueChart(data: data.current),
-                ),
-                const SizedBox(height: 16),
-                _ChartPanel(
-                  title: 'Transactions Per Day',
-                  subtitle: 'Shows when customer flow is strongest.',
-                  child: _TransactionChart(data: data.current),
-                ),
-                const SizedBox(height: 16),
-                _ChartPanel(
-                  title: 'Top 5 Items by Revenue',
-                  subtitle: 'Item totals for the selected date range.',
-                  child: _TopItems(data: data.itemRevenue),
-                ),
-                const SizedBox(height: 16),
-                _ChartPanel(
-                  title: 'Sales by Hour',
-                  subtitle: 'Transaction revenue grouped by hour.',
-                  child: _HourlySales(data: data.hourlySales),
-                ),
-              ],
+              ),
             );
           },
         ),
@@ -342,7 +351,7 @@ class _AnalyticsHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF123C2C),
+        color: RetailPalette.deepForest,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -360,7 +369,7 @@ class _AnalyticsHeader extends StatelessWidget {
           Text(
             '${data.periodLabel}: ${_money(data.revenue)} across ${data.transactions} bills. ${_comparisonText(data.revenue, data.previousRevenue)}',
             style: const TextStyle(
-              color: Color(0xFFEAF5EE),
+              color: RetailPalette.paleMint,
               fontWeight: FontWeight.w700,
               height: 1.35,
             ),
@@ -397,28 +406,28 @@ class _SummaryCards extends StatelessWidget {
             value: _dateLabel(high.date),
             detail: _money(high.totalRevenue),
             icon: Icons.trending_up_rounded,
-            accent: const Color(0xFFDFF3E5),
+            accent: RetailPalette.toneDFF3E5,
           ),
           _MetricCard(
             label: 'Lowest Sales',
             value: _dateLabel(low.date),
             detail: _money(low.totalRevenue),
             icon: Icons.trending_down_rounded,
-            accent: const Color(0xFFFFE4DE),
+            accent: RetailPalette.toneFFE4DE,
           ),
           _MetricCard(
             label: 'Busiest Day',
             value: busiest.dayOfWeek,
             detail: '${busiest.transactionCount} bills',
             icon: Icons.groups_rounded,
-            accent: const Color(0xFFE8F0FF),
+            accent: RetailPalette.toneE8F0FF,
           ),
           _MetricCard(
             label: 'Average Bill Value',
             value: _money(data.averageBillValue),
             detail: '${data.transactions} bills',
             icon: Icons.receipt_long_rounded,
-            accent: const Color(0xFFFFF0C7),
+            accent: RetailPalette.toneFFF0C7,
           ),
         ];
 
@@ -475,7 +484,7 @@ class _MetricCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE1D8CE)),
+        border: Border.all(color: RetailPalette.border),
       ),
       child: Row(
         children: <Widget>[
@@ -486,7 +495,7 @@ class _MetricCard extends StatelessWidget {
               color: accent,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: const Color(0xFF2E2722)),
+            child: Icon(icon, color: RetailPalette.charcoal),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -497,7 +506,7 @@ class _MetricCard extends StatelessWidget {
                 Text(
                   label,
                   style: const TextStyle(
-                    color: Color(0xFF8B8179),
+                    color: RetailPalette.subtleText,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -512,7 +521,7 @@ class _MetricCard extends StatelessWidget {
                 Text(
                   detail,
                   style: const TextStyle(
-                    color: Color(0xFF5E534B),
+                    color: RetailPalette.bodyText,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -543,7 +552,7 @@ class _ChartPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE1D8CE)),
+        border: Border.all(color: RetailPalette.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -556,7 +565,7 @@ class _ChartPanel extends StatelessWidget {
           Text(
             subtitle,
             style: const TextStyle(
-              color: Color(0xFF6A5F57),
+              color: RetailPalette.mutedText,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -614,7 +623,7 @@ class _RevenueChart extends StatelessWidget {
         titlesData: _titlesData(data, currency: true),
         barTouchData: BarTouchData(
           touchTooltipData: BarTouchTooltipData(
-            getTooltipColor: (_) => const Color(0xFF2E2722),
+            getTooltipColor: (_) => RetailPalette.charcoal,
             getTooltipItem: (group, groupIndex, rod, rodIndex) {
               final x = group.x;
               final safeIndex = (x >= 0 && x < data.length) ? x.toInt() : -1;
@@ -641,9 +650,7 @@ class _RevenueChart extends StatelessWidget {
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(5),
                 ),
-                color: isHigh
-                    ? const Color(0xFF2E7D32)
-                    : const Color(0xFFCC8A2E),
+                color: isHigh ? RetailPalette.green : RetailPalette.gold,
               ),
             ],
           );
@@ -673,7 +680,7 @@ class _TransactionChart extends StatelessWidget {
         titlesData: _titlesData(data),
         barTouchData: BarTouchData(
           touchTooltipData: BarTouchTooltipData(
-            getTooltipColor: (_) => const Color(0xFF2E2722),
+            getTooltipColor: (_) => RetailPalette.charcoal,
             getTooltipItem: (group, groupIndex, rod, rodIndex) {
               return BarTooltipItem(
                 '${rod.toY.toStringAsFixed(0)} bills\n${_money(data[group.x].totalRevenue)}',
@@ -697,9 +704,7 @@ class _TransactionChart extends StatelessWidget {
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(5),
                 ),
-                color: isHigh
-                    ? const Color(0xFF1769AA)
-                    : const Color(0xFF8FB6D9),
+                color: isHigh ? RetailPalette.blue : RetailPalette.tone8FB6D9,
               ),
             ],
           );
@@ -820,7 +825,7 @@ class _HourlySales extends StatelessWidget {
                 BarChartRodData(
                   toY: byHour[hour],
                   width: 10,
-                  color: const Color(0xFFCC8A2E),
+                  color: RetailPalette.gold,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(3),
                   ),
@@ -867,7 +872,7 @@ FlTitlesData _titlesData(List<SalesSummary> data, {bool currency = false}) {
                 Text(
                   data[index].dayOfWeek,
                   style: const TextStyle(
-                    color: Color(0xFF2E2722),
+                    color: RetailPalette.charcoal,
                     fontSize: 11,
                     fontWeight: FontWeight.w900,
                   ),
@@ -875,7 +880,7 @@ FlTitlesData _titlesData(List<SalesSummary> data, {bool currency = false}) {
                 Text(
                   data[index].shortDate,
                   style: const TextStyle(
-                    color: Color(0xFF8B8179),
+                    color: RetailPalette.subtleText,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                   ),
@@ -908,7 +913,7 @@ class _StateMessage extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       children: <Widget>[
         const SizedBox(height: 120),
-        Icon(icon, size: 48, color: const Color(0xFF6A5F57)),
+        Icon(icon, size: 48, color: RetailPalette.mutedText),
         const SizedBox(height: 12),
         Text(
           title,
@@ -920,7 +925,7 @@ class _StateMessage extends StatelessWidget {
           message,
           textAlign: TextAlign.center,
           style: const TextStyle(
-            color: Color(0xFF6A5F57),
+            color: RetailPalette.mutedText,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -979,7 +984,7 @@ class _AnalyticsLoading extends StatelessWidget {
           height: index == 0 ? 120 : 86,
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFFE8E2DB),
+            color: RetailPalette.skeleton,
             borderRadius: BorderRadius.circular(12),
           ),
         ),
