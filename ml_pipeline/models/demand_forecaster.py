@@ -5,6 +5,7 @@ import logging
 import pandas as pd
 from config import (
     FORECAST_CLOSED_DATES,
+    FORECAST_EXCLUDED_DATES,
     FORECAST_HOLDOUT_DAYS,
     FORECAST_HORIZON_DAYS,
     FORECAST_INTERVAL_LOWER_FACTOR,
@@ -24,10 +25,11 @@ LOGGER = logging.getLogger(__name__)
 def _calendar_days(start, end):
     """Calendar days are open by default; optionally omit known closed dates."""
     days = pd.date_range(start, end, freq="D")
-    if not FORECAST_CLOSED_DATES:
+    omitted_dates = FORECAST_CLOSED_DATES | FORECAST_EXCLUDED_DATES
+    if not omitted_dates:
         return days
     return pd.DatetimeIndex(
-        [day for day in days if day.strftime("%Y-%m-%d") not in FORECAST_CLOSED_DATES]
+        [day for day in days if day.strftime("%Y-%m-%d") not in omitted_dates]
     )
 
 
@@ -39,6 +41,11 @@ def _daily_demand_frame(df):
     daily = (
         df.assign(created_date=pd.to_datetime(df["created_date"], errors="coerce"))
         .dropna(subset=["created_date"])
+        .loc[
+            lambda rows: ~rows["created_date"]
+            .dt.strftime("%Y-%m-%d")
+            .isin(FORECAST_EXCLUDED_DATES)
+        ]
         .groupby("created_date", as_index=False)[demand_column]
         .sum()
         .rename(columns={"created_date": "ds", demand_column: "y"})
@@ -97,6 +104,8 @@ def _item_daily_frames(df):
     for _, sale in df[["created_date", "items"]].iterrows():
         day = pd.to_datetime(sale["created_date"], errors="coerce")
         if pd.isna(day):
+            continue
+        if day.strftime("%Y-%m-%d") in FORECAST_EXCLUDED_DATES:
             continue
         items = sale["items"]
         if isinstance(items, str):

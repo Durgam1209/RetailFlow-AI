@@ -45,6 +45,11 @@ FORECAST_MIN_ITEM_NONZERO_DAYS = int(os.getenv("MIN_ITEM_NONZERO_DAYS", "7"))
 FORECAST_CLOSED_DATES = frozenset(
     value.strip() for value in os.getenv("SHOP_CLOSED_DATES", "").split(",") if value.strip()
 )
+FORECAST_EXCLUDED_DATES = frozenset(
+    value.strip()
+    for value in os.getenv("FORECAST_EXCLUDED_DATES", "").split(",")
+    if value.strip()
+)
 BASKET_MIN_TRANSACTIONS = int(os.getenv("BASKET_MIN_TRANSACTIONS", "20"))
 BASKET_MIN_SUPPORT_COUNT = int(os.getenv("BASKET_MIN_SUPPORT_COUNT", "3"))
 BASKET_MIN_LIFT = float(os.getenv("BASKET_MIN_LIFT", "1.2"))

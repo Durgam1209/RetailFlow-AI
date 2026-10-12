@@ -1,3 +1,4 @@
+import models.demand_forecaster as forecaster
 import pandas as pd
 import pytest
 from models.demand_forecaster import _newsvendor_quantile, _score, _time_holdout_split
@@ -24,3 +25,23 @@ def test_evaluation_rows_never_enter_training_rows():
     assert train["ds"].max() < evaluation["ds"].min()
     assert set(train["ds"]).isdisjoint(evaluation["ds"])
     assert evaluation["y"].tolist() == [9, 10, 11]
+
+
+def test_configured_outlier_date_is_excluded_from_aggregate_and_item_history(monkeypatch):
+    monkeypatch.setattr(forecaster, "FORECAST_EXCLUDED_DATES", frozenset({"2026-01-02"}))
+    sales = pd.DataFrame(
+        {
+            "created_date": ["2026-01-01", "2026-01-02", "2026-01-03"],
+            "total_amount": [10, 10000, 30],
+            "item_count": [1, 100, 3],
+            "items": [[{"fruitName": "Apple", "quantityKg": 1}],
+                      [{"fruitName": "Apple", "quantityKg": 100}],
+                      [{"fruitName": "Apple", "quantityKg": 3}]],
+        }
+    )
+
+    aggregate = forecaster._daily_demand_frame(sales)
+    item_frames = forecaster._item_daily_frames(sales)
+
+    assert aggregate["y"].tolist() == [1, 3]
+    assert item_frames["Apple"]["y"].tolist() == [1, 3]
