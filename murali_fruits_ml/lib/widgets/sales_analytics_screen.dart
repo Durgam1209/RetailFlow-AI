@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/sales_summary_model.dart';
@@ -962,8 +961,24 @@ String _money(double value) {
   return formatRupees(value);
 }
 
-String _dateLabel(DateTime value) =>
-    DateFormat('EEE d MMM', 'en_IN').format(value);
+String _dateLabel(DateTime value) {
+  const weekdays = <String>['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return '${weekdays[value.weekday - 1]} ${value.day} ${months[value.month - 1]}';
+}
 
 String _comparisonText(double current, double previous) {
   if (previous <= 0) return 'No previous-period baseline';
