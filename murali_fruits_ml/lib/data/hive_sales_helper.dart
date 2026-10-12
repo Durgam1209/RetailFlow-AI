@@ -1,12 +1,15 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/fruit_item.dart';
 
 class HiveSalesHelper {
+  HiveSalesHelper();
+
   static const String _draftBoxName = 'draft_transaction_box_secure_v1';
   static const String _salesBoxName = 'sales_log_box_secure_v1';
   static const String _priceBoxName = 'last_price_box_secure_v1';
@@ -27,6 +30,19 @@ class HiveSalesHelper {
   late final Box<Map> _salesBox;
   late final Box<Map> _priceBox;
   late final Box<Map> _catalogBox;
+
+  @visibleForTesting
+  HiveSalesHelper.forTest({
+    required Box<Map> draftBox,
+    required Box<Map> salesBox,
+    required Box<Map> priceBox,
+    required Box<Map> catalogBox,
+  }) {
+    _draftBox = draftBox;
+    _salesBox = salesBox;
+    _priceBox = priceBox;
+    _catalogBox = catalogBox;
+  }
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -273,6 +289,12 @@ class HiveSalesHelper {
         'price': roundedPrice,
         ..._timestampFields('updated', now),
       });
+      final catalogRecord = _catalogBox.get(fruit.id);
+      if (catalogRecord != null) {
+        final updatedCatalogRecord = Map<String, dynamic>.from(catalogRecord)
+          ..['defaultPrice'] = roundedPrice;
+        await _catalogBox.put(fruit.id, updatedCatalogRecord);
+      }
     }
   }
 

@@ -530,6 +530,7 @@ class _SalesHomePageState extends State<SalesHomePage> {
       return;
     }
     setState(() {
+      _catalog = widget.salesHelper.loadCatalog(_defaultCatalog);
       _draftItems = widget.salesHelper.loadDraftSession(_catalog);
     });
   }
@@ -2107,21 +2108,24 @@ class PriceEditorSheetState extends State<PriceEditorSheet> {
                   onChanged: (value) {
                     if (value != null) setState(() => _saveAsDefault = value);
                   },
-                  child: const Column(
-                    children: <Widget>[
-                      RadioListTile<bool>(
-                        value: false,
-                        title: Text('This bill only'),
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                      ),
-                      RadioListTile<bool>(
-                        value: true,
-                        title: Text('Save as new default price'),
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                      ),
-                    ],
+                  child: Material(
+                    color: RetailPalette.white,
+                    child: const Column(
+                      children: <Widget>[
+                        RadioListTile<bool>(
+                          value: false,
+                          title: Text('This bill only'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                        RadioListTile<bool>(
+                          value: true,
+                          title: Text('Save as new default price'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),

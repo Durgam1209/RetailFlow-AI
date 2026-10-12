@@ -1,12 +1,12 @@
 import '../theme/app_theme.dart';
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/hive_sales_helper.dart';
 import '../utils/currency_formatter.dart';
+import '../utils/insight_parser.dart';
 import '../utils/insight_recommendations.dart';
+import 'insights_freshness_indicator.dart';
 
 class InsightsScreen extends StatefulWidget {
   const InsightsScreen({super.key, required this.salesHelper});
@@ -93,10 +93,22 @@ class _InsightsScreenState extends State<InsightsScreen> {
               'WARNING: Unsupported daily_insights schema_version "$schemaVersion".',
             );
           }
-          final bundles = _decodeList(data, 'suggested_bundles');
-          final forecasts = _decodeList(data, 'stock_advice');
-          final festivalAdvice = _decodeMap(data, 'festival_advice');
-          final weatherAdvice = _decodeMap(data, 'weather_advice');
+          final bundles = parseInsightList(
+            data['suggested_bundles'],
+            field: 'suggested_bundles',
+          );
+          final forecasts = parseInsightList(
+            data['stock_advice'],
+            field: 'stock_advice',
+          );
+          final festivalAdvice = parseInsightMap(
+            data['festival_advice'],
+            field: 'festival_advice',
+          );
+          final weatherAdvice = parseInsightMap(
+            data['weather_advice'],
+            field: 'weather_advice',
+          );
           final activeBundles = bundles
               .where(
                 (bundle) => !_dismissedBundleKeys.contains(_bundleKey(bundle)),
@@ -110,15 +122,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
             bundles: activeBundles,
             festivalAdvice: festivalAdvice,
           );
-          final summaryValue = data['forecast_summary'];
-          final summary = summaryValue is String && summaryValue.isNotEmpty
-              ? summaryValue
-              : 'Demand is steady.';
-          if (summaryValue is! String || summaryValue.isEmpty) {
-            debugPrint(
-              'WARNING: daily_insights is missing forecast_summary; using the UI fallback.',
-            );
-          }
+          final summary = parseInsightSummary(data['forecast_summary']);
           if (data['created_at'] == null) {
             debugPrint(
               'WARNING: daily_insights is missing created_at; the update time may be blank.',
@@ -206,47 +210,6 @@ class _InsightsScreenState extends State<InsightsScreen> {
     );
   }
 
-  List<dynamic> _decodeList(Map<String, dynamic> data, String field) {
-    final value = data[field];
-    try {
-      if (value is String && value.trim().isNotEmpty) {
-        final decoded = jsonDecode(value);
-        if (decoded is List) return decoded;
-      }
-      if (value is List) {
-        return value;
-      }
-    } catch (_) {
-      // Warn below and use an empty collection for older or malformed rows.
-    }
-    debugPrint(
-      'WARNING: daily_insights.$field is missing or invalid; using an empty list.',
-    );
-    return <dynamic>[];
-  }
-
-  Map<String, dynamic> _decodeMap(Map<String, dynamic> data, String field) {
-    final value = data[field];
-    try {
-      if (value is String && value.trim().isNotEmpty) {
-        final decoded = jsonDecode(value);
-        return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
-      }
-      if (value is Map<String, dynamic>) {
-        return value;
-      }
-      if (value is Map) {
-        return Map<String, dynamic>.from(value);
-      }
-    } catch (_) {
-      // Warn below and use an empty map for older or malformed rows.
-    }
-    debugPrint(
-      'WARNING: daily_insights.$field is missing or invalid; using an empty object.',
-    );
-    return <String, dynamic>{};
-  }
-
   Map<String, dynamic> _weatherAdviceFromForecasts(List<dynamic> forecasts) {
     for (final forecast in forecasts) {
       final row = forecast is Map<String, dynamic>
@@ -293,12 +256,6 @@ class _SummaryPanel extends StatelessWidget {
     final averageRevenue = _averageRevenue(forecasts);
     final peak = _peakForecast(forecasts);
     final topFruit = _topFruitName(peak);
-    final updated = updatedAt == null
-        ? null
-        : DateTime.tryParse(updatedAt.toString())?.toLocal();
-    final age = updated == null ? null : DateTime.now().difference(updated);
-    final isVeryStale = age != null && age > const Duration(hours: 72);
-    final isStale = age != null && age > const Duration(hours: 24);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -408,36 +365,7 @@ class _SummaryPanel extends StatelessWidget {
           ),
           if (updatedAt != null) ...<Widget>[
             const SizedBox(height: 14),
-            Row(
-              children: [
-                Icon(
-                  Icons.access_time_rounded,
-                  size: 13,
-                  color: isVeryStale
-                      ? RetailPalette.toneFF8A80
-                      : isStale
-                      ? RetailPalette.toneFFD180
-                      : Colors.white.withValues(alpha: 0.75),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    isStale
-                        ? 'Insights are ${age.inDays.clamp(1, 999)} days old, advice may be outdated - Updated ${_formatTimestamp(updatedAt)}'
-                        : 'Updated ${_formatTimestamp(updatedAt)}',
-                    style: TextStyle(
-                      color: isVeryStale
-                          ? RetailPalette.toneFF8A80
-                          : isStale
-                          ? RetailPalette.toneFFD180
-                          : Colors.white.withValues(alpha: 0.85),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            InsightsFreshnessIndicator(updatedAt: updatedAt.toString()),
           ],
         ],
       ),
@@ -1398,17 +1326,3 @@ Map<String, dynamic> _asMap(dynamic value) =>
 
 String _kgLabel(double value) =>
     '${value == value.roundToDouble() ? value.toStringAsFixed(0) : value.toStringAsFixed(1)} kg';
-
-String _formatTimestamp(dynamic value) {
-  final parsed = DateTime.tryParse(value.toString());
-  if (parsed == null) {
-    return value.toString();
-  }
-  final local = parsed.toLocal();
-  final hour = local.hour == 0
-      ? 12
-      : (local.hour > 12 ? local.hour - 12 : local.hour);
-  final minute = local.minute.toString().padLeft(2, '0');
-  final meridiem = local.hour >= 12 ? 'PM' : 'AM';
-  return '${local.day}/${local.month}/${local.year} $hour:$minute $meridiem';
-}

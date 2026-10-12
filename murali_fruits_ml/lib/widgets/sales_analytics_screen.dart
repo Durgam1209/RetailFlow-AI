@@ -252,10 +252,10 @@ class _SalesAnalyticsScreenState extends State<SalesAnalyticsScreen> {
           future: _summaryFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const _AnalyticsLoading();
+              return const AnalyticsLoadingSkeleton();
             }
             if (snapshot.hasError) {
-              return _StateMessage(
+              return AnalyticsStateMessage(
                 icon: Icons.error_outline_rounded,
                 title: 'Analytics unavailable',
                 message: 'Check your connection and try loading sales again.',
@@ -267,7 +267,7 @@ class _SalesAnalyticsScreenState extends State<SalesAnalyticsScreen> {
 
             final payload = snapshot.data;
             if (payload == null || payload.summaries.isEmpty) {
-              return const _StateMessage(
+              return const AnalyticsStateMessage(
                 icon: Icons.bar_chart_rounded,
                 title: 'No sales yet',
                 message: 'Finish a few transactions to see daily patterns.',
@@ -894,8 +894,9 @@ FlTitlesData _titlesData(List<SalesSummary> data, {bool currency = false}) {
   );
 }
 
-class _StateMessage extends StatelessWidget {
-  const _StateMessage({
+class AnalyticsStateMessage extends StatelessWidget {
+  const AnalyticsStateMessage({
+    super.key,
     required this.icon,
     required this.title,
     required this.message,
@@ -971,8 +972,8 @@ String _comparisonText(double current, double previous) {
   return '${change.abs().round()}% $direction vs previous period';
 }
 
-class _AnalyticsLoading extends StatelessWidget {
-  const _AnalyticsLoading();
+class AnalyticsLoadingSkeleton extends StatelessWidget {
+  const AnalyticsLoadingSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {
