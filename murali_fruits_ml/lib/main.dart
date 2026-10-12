@@ -795,7 +795,7 @@ class _SalesHomePageState extends State<SalesHomePage> {
         body: TabBarView(
           children: [
             _buildSalesTab(),
-            const InsightsScreen(),
+            InsightsScreen(salesHelper: widget.salesHelper),
             const SalesAnalyticsScreen(),
           ],
         ),

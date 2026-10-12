@@ -178,14 +178,14 @@ def _evaluate_items(item_frames):
     per_item = {}
     for name, daily in item_frames.items():
         nonzero_days = int((daily["y"] > 0).sum())
+        history = {"history_days": int(len(daily)), "nonzero_days": nonzero_days}
         if (
             len(daily) < FORECAST_MIN_ITEM_HISTORY_DAYS
             or nonzero_days < FORECAST_MIN_ITEM_NONZERO_DAYS
         ):
             per_item[name] = {
+                **history,
                 "model_used": "cold_start_fallback",
-                "history_days": int(len(daily)),
-                "nonzero_days": nonzero_days,
                 "cold_start": True,
             }
             continue
@@ -213,7 +213,7 @@ def _evaluate_items(item_frames):
                 LOGGER.warning(
                     "Holdout Prophet evaluation failed for item %s", name, exc_info=error
                 )
-        per_item[name] = {"baseline": _score(actual, naive)}
+        per_item[name] = {**history, "baseline": _score(actual, naive)}
         if prophet_prediction is not None:
             per_item[name]["prophet"] = _score(actual, prophet_prediction)
             per_item[name]["beats_baseline"] = (

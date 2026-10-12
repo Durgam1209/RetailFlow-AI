@@ -608,6 +608,10 @@ def format_basket_rules(rules_df: pd.DataFrame) -> list[dict[str, Any]]:
                 "confidence_percent": confidence_percent,
                 "lift": lift,
                 "pair_count": pair_count,
+                "antecedent_count": antecedent_count,
+                "transaction_count": int(
+                    _safe_float(row["transaction_count"] if "transaction_count" in row else 0)
+                ),
                 "strength": _bundle_strength(confidence),
                 "advice": (
                     f"Place {pair_1} near {pair_2}. About "
@@ -655,12 +659,17 @@ def _fruit_baselines(item_sales):
             "quantity_kg": daily_kg,
             "revenue": daily_revenue,
             "unit_price": unit_price,
+            "history_days": int(
+                item_sales.loc[item_sales["fruit_name"] == name, "date"].nunique()
+            ),
         }
 
     return baselines
 
 
-def _apply_per_fruit_breakdown(stock_advice, enriched_data, festival_advice):
+def _apply_per_fruit_breakdown(
+    stock_advice, enriched_data, festival_advice, forecast_metrics=None
+):
     item_sales = _item_sales_frame(enriched_data)
     baselines = _fruit_baselines(item_sales)
     festival_date = festival_advice.get("festival_date") if festival_advice else None
@@ -676,6 +685,8 @@ def _apply_per_fruit_breakdown(stock_advice, enriched_data, festival_advice):
         fruit_rows = []
 
         for fruit_name, baseline in baselines.items():
+            item_metric = (forecast_metrics or {}).get("item_metrics", {}).get(fruit_name, {})
+            prophet_metric = item_metric.get("prophet", {})
             quantity_kg = baseline["quantity_kg"]
             revenue = baseline["revenue"]
             is_festival_pick = is_festival_day and fruit_name in festival_fruits
@@ -692,6 +703,9 @@ def _apply_per_fruit_breakdown(stock_advice, enriched_data, festival_advice):
                     "suggested_kg": round(quantity_kg, 1),
                     "expected_revenue": round(revenue),
                     "is_festival_pick": is_festival_pick,
+                    "history_days": int(item_metric.get("history_days", baseline["history_days"])),
+                    "beats_baseline": item_metric.get("beats_baseline"),
+                    "wape_pct": prophet_metric.get("wape_pct"),
                     "stock_label": f"{_format_kg(quantity_kg)} {fruit_name}",
                     "revenue_label": _format_rupees(revenue),
                 }
@@ -934,12 +948,15 @@ def _format_insight_payload(
     enriched_data: pd.DataFrame,
     basket_rules: pd.DataFrame,
     forecast: pd.DataFrame,
+    forecast_metrics: dict,
 ) -> tuple[dict, bool]:
     """Build the mobile app's daily insight record from model and enrichment outputs."""
     suggested_bundles = format_basket_rules(basket_rules)
     stock_advice = format_forecast_advice(forecast)
     festival_advice = get_festival_advice(enriched_data)
-    stock_advice = _apply_per_fruit_breakdown(stock_advice, enriched_data, festival_advice)
+    stock_advice = _apply_per_fruit_breakdown(
+        stock_advice, enriched_data, festival_advice, forecast_metrics
+    )
     tomorrow_weather = fetch_tomorrow_weather()
     weather_is_current = (
         tomorrow_weather.get("date") == (date.today() + timedelta(days=1)).isoformat()
@@ -1006,6 +1023,7 @@ def main() -> int:
                 enriched_data,
                 basket.value if basket.succeeded else pd.DataFrame(),
                 forecast,
+                forecast_metrics,
             ),
         )
     else:

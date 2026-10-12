@@ -20,7 +20,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["pair_1", "pair_2", "title", "confidence", "raw_confidence", "confidence_percent", "lift", "pair_count", "antecedent_count", "strength", "advice"],
+        "required": ["pair_1", "pair_2", "title", "confidence", "raw_confidence", "confidence_percent", "lift", "pair_count", "antecedent_count", "transaction_count", "strength", "advice"],
         "properties": {
           "pair_1": {"type": "string"}, "pair_2": {"type": "string"}, "title": {"type": "string"},
           "confidence": {"type": "number", "minimum": 0, "maximum": 1},
@@ -28,6 +28,7 @@
           "confidence_percent": {"type": "integer", "minimum": 0, "maximum": 100},
           "lift": {"type": "number", "minimum": 0},
           "pair_count": {"type": "integer", "minimum": 0}, "antecedent_count": {"type": "integer", "minimum": 0},
+          "transaction_count": {"type": "integer", "minimum": 0},
           "strength": {"type": "string"}, "advice": {"type": "string"}
         },
         "additionalProperties": false
@@ -49,11 +50,16 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["fruit_name", "suggested_kg", "expected_revenue", "is_festival_pick", "is_weather_pick", "stock_label", "revenue_label"],
+              "required": ["fruit_name", "suggested_kg", "expected_revenue", "is_festival_pick", "is_weather_pick", "history_days", "beats_baseline", "wape_pct", "stock_label", "revenue_label"],
               "properties": {
                 "fruit_name": {"type": "string"}, "suggested_kg": {"type": "number", "minimum": 0},
+                "recommended_order_qty": {"type": ["number", "null"], "minimum": 0},
+                "range_low_kg": {"type": ["number", "null"], "minimum": 0},
+                "range_high_kg": {"type": ["number", "null"], "minimum": 0},
                 "expected_revenue": {"type": "number", "minimum": 0}, "is_festival_pick": {"type": "boolean"},
-                "is_weather_pick": {"type": "boolean"}, "stock_label": {"type": "string"}, "revenue_label": {"type": "string"}
+                "is_weather_pick": {"type": "boolean"}, "history_days": {"type": "integer", "minimum": 0},
+                "beats_baseline": {"type": ["boolean", "null"]}, "wape_pct": {"type": ["number", "null"]},
+                "stock_label": {"type": "string"}, "revenue_label": {"type": "string"}
               },
               "additionalProperties": false
             }

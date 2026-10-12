@@ -46,6 +46,7 @@ def run_basket_analysis(df: pd.DataFrame) -> pd.DataFrame:
             "lift",
             "pair_count",
             "antecedent_count",
+            "transaction_count",
         ]
     )
 
@@ -79,6 +80,7 @@ def run_basket_analysis(df: pd.DataFrame) -> pd.DataFrame:
         )
         return empty
     min_support = min(1.0, min_support_count / transaction_count)
+    # Carry the full basket sample size for confidence labels in the app.
 
     # Find frequent itemsets
     frequent_itemsets = apriori(basket_sets, min_support=min_support, use_colnames=True, max_len=3)
@@ -97,6 +99,7 @@ def run_basket_analysis(df: pd.DataFrame) -> pd.DataFrame:
     rules["antecedent_count"] = (
         (rules["antecedent support"] * transaction_count).round().astype(int)
     )
+    rules["transaction_count"] = transaction_count
     rules = rules[(rules["pair_count"] >= min_support_count) & (rules["lift"] > min_lift)]
     if rules.empty:
         return empty
@@ -109,5 +112,6 @@ def run_basket_analysis(df: pd.DataFrame) -> pd.DataFrame:
             "lift",
             "pair_count",
             "antecedent_count",
+            "transaction_count",
         ]
     ]

@@ -18,6 +18,7 @@ def test_tiny_fixture_returns_expected_association():
         rows.append({"transaction_id": f"tx-{index}", "items": items})
     rules = run_basket_analysis(pd.DataFrame(rows))
     assert not rules.empty
+    assert set(rules["transaction_count"]) == {30}
     assert any(
         {"Apple", "Banana"} == set(rule.antecedents | rule.consequents)
         for rule in rules.itertuples()

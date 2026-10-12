@@ -3,8 +3,14 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../data/hive_sales_helper.dart';
+import '../utils/currency_formatter.dart';
+import '../utils/insight_recommendations.dart';
+
 class InsightsScreen extends StatefulWidget {
-  const InsightsScreen({super.key});
+  const InsightsScreen({super.key, required this.salesHelper});
+
+  final HiveSalesHelper salesHelper;
 
   @override
   State<InsightsScreen> createState() => _InsightsScreenState();
@@ -12,11 +18,18 @@ class InsightsScreen extends StatefulWidget {
 
 class _InsightsScreenState extends State<InsightsScreen> {
   late Future<Map<String, dynamic>?> _insightsFuture;
+  Set<String> _dismissedBundleKeys = <String>{};
 
   @override
   void initState() {
     super.initState();
     _insightsFuture = fetchLatestInsights();
+    _dismissedBundleKeys = widget.salesHelper.loadDismissedInsightBundleKeys();
+  }
+
+  Future<void> _dismissBundle(String key) async {
+    await widget.salesHelper.dismissInsightBundle(key);
+    if (mounted) setState(() => _dismissedBundleKeys.add(key));
   }
 
   Future<Map<String, dynamic>?> fetchLatestInsights() async {
@@ -83,16 +96,24 @@ class _InsightsScreenState extends State<InsightsScreen> {
           final forecasts = _decodeList(data, 'stock_advice');
           final festivalAdvice = _decodeMap(data, 'festival_advice');
           final weatherAdvice = _decodeMap(data, 'weather_advice');
+          final activeBundles = bundles
+              .where(
+                (bundle) => !_dismissedBundleKeys.contains(_bundleKey(bundle)),
+              )
+              .toList();
           final visibleWeatherAdvice = weatherAdvice.isNotEmpty
               ? weatherAdvice
               : _weatherAdviceFromForecasts(forecasts);
           final placementPlan = _buildPlacementPlan(
             forecasts: forecasts,
-            bundles: bundles,
+            bundles: activeBundles,
             festivalAdvice: festivalAdvice,
           );
-          final summary = data['forecast_summary'] as String? ?? 'Demand is steady.';
-          if (data['forecast_summary'] == null) {
+          final summaryValue = data['forecast_summary'];
+          final summary = summaryValue is String && summaryValue.isNotEmpty
+              ? summaryValue
+              : 'Demand is steady.';
+          if (summaryValue is! String || summaryValue.isEmpty) {
             debugPrint(
               'WARNING: daily_insights is missing forecast_summary; using the UI fallback.',
             );
@@ -154,7 +175,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 const _SectionHeader(
                   title: 'Shop Placement Plan',
                   subtitle:
-                      'Your painted layout, with fruits placed where tomorrow\'s selling plan fits best.',
+                      'Simple zones based on forecast priorities and basket pairings.',
                 ),
                 const SizedBox(height: 10),
                 _PlacementPlanCard(plan: placementPlan),
@@ -165,7 +186,11 @@ class _InsightsScreenState extends State<InsightsScreen> {
                       'Use these as display and counter-placement actions.',
                 ),
                 const SizedBox(height: 10),
-                _BundleList(bundles: bundles),
+                _BundleList(
+                  bundles: bundles,
+                  dismissedKeys: _dismissedBundleKeys,
+                  onDismiss: _dismissBundle,
+                ),
               ],
             ),
           );
@@ -187,7 +212,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
     } catch (_) {
       // Warn below and use an empty collection for older or malformed rows.
     }
-    debugPrint('WARNING: daily_insights.$field is missing or invalid; using an empty list.');
+    debugPrint(
+      'WARNING: daily_insights.$field is missing or invalid; using an empty list.',
+    );
     return <dynamic>[];
   }
 
@@ -207,7 +234,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
     } catch (_) {
       // Warn below and use an empty map for older or malformed rows.
     }
-    debugPrint('WARNING: daily_insights.$field is missing or invalid; using an empty object.');
+    debugPrint(
+      'WARNING: daily_insights.$field is missing or invalid; using an empty object.',
+    );
     return <String, dynamic>{};
   }
 
@@ -236,7 +265,8 @@ class _InsightsScreenState extends State<InsightsScreen> {
     if (advice.isEmpty) {
       return false;
     }
-    return advice['is_active'] != false;
+    return advice['is_active'] != false &&
+        (advice['priority']?.toString().toLowerCase() ?? 'high') == 'high';
   }
 }
 
@@ -267,10 +297,7 @@ class _SummaryPanel extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            const Color(0xFF0F382C),
-            const Color(0xFF165B46),
-          ],
+          colors: [const Color(0xFF0F382C), const Color(0xFF165B46)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -363,7 +390,7 @@ class _SummaryPanel extends StatelessWidget {
             children: <Widget>[
               _MetricPill(
                 label: 'Avg Daily Revenue',
-                value: _formatCurrency(averageRevenue),
+                value: formatRupees(averageRevenue),
               ),
               _MetricPill(
                 label: 'Peak Revenue Day',
@@ -749,8 +776,7 @@ class _ForecastList extends StatelessWidget {
           'weather_adjustment',
         )?.toString();
         final topFruits = _asDynamicList(_field(forecast, 'top_fruits'));
-        final confidence =
-            _field(forecast, 'confidence_label')?.toString() ?? 'Learning';
+        final confidence = forecastConfidenceLabel(_asMap(forecast));
 
         return Card(
           margin: const EdgeInsets.only(bottom: 10),
@@ -851,7 +877,7 @@ class _ForecastList extends StatelessWidget {
 class _PlacementPlanCard extends StatelessWidget {
   const _PlacementPlanCard({required this.plan});
 
-  final Map<String, List<String>> plan;
+  final Map<String, List<_PlacementSuggestion>> plan;
 
   @override
   Widget build(BuildContext context) {
@@ -865,115 +891,23 @@ class _PlacementPlanCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              const Expanded(
-                child: Text(
-                  'Layout image active',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: null,
-                icon: const Icon(Icons.image_outlined, size: 16),
-                label: const Text(
-                  'Swap photo later',
-                  style: TextStyle(fontWeight: FontWeight.w900),
-                ),
-              ),
-            ],
+          _PlacementZone(
+            title: 'Front display',
+            icon: Icons.storefront_rounded,
+            suggestions:
+                plan['front_display'] ?? const <_PlacementSuggestion>[],
           ),
-          const SizedBox(height: 6),
-          const Text(
-            'This board now uses your layout image. Later, we can replace it with a real shop photo and keep the same placement zones.',
-            style: TextStyle(
-              color: Color(0xFF6A5F57),
-              fontWeight: FontWeight.w700,
-            ),
+          const SizedBox(height: 10),
+          _PlacementZone(
+            title: 'Quick-flow',
+            icon: Icons.flash_on_rounded,
+            suggestions: plan['quick_flow'] ?? const <_PlacementSuggestion>[],
           ),
-          const SizedBox(height: 14),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: AspectRatio(
-              aspectRatio: 1402 / 1120,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: <Widget>[
-                      Image.asset(
-                        'assets/images/shop_layout.png',
-                        fit: BoxFit.cover,
-                      ),
-                      _ZoneOverlay(
-                        left: 0.25,
-                        top: 0.13,
-                        width: 0.20,
-                        title: 'Elevated L2',
-                        fruits: plan['inside_upper_two'] ?? const <String>[],
-                      ),
-                      _ZoneOverlay(
-                        left: 0.28,
-                        top: 0.29,
-                        width: 0.20,
-                        title: 'Elevated L1',
-                        fruits: plan['inside_upper_one'] ?? const <String>[],
-                      ),
-                      _ZoneOverlay(
-                        left: 0.52,
-                        top: 0.42,
-                        width: 0.16,
-                        title: 'Counter',
-                        fruits: plan['inside_counter'] ?? const <String>[],
-                      ),
-                      _ZoneOverlay(
-                        left: 0.18,
-                        top: 0.58,
-                        width: 0.22,
-                        title: 'Table 2',
-                        fruits: plan['outside_table_two'] ?? const <String>[],
-                      ),
-                      _ZoneOverlay(
-                        left: 0.48,
-                        top: 0.70,
-                        width: 0.11,
-                        title: 'Quick flow',
-                        fruits: plan['outside_quick_flow'] ?? const <String>[],
-                      ),
-                      _ZoneOverlay(
-                        left: 0.60,
-                        top: 0.66,
-                        width: 0.18,
-                        title: 'Table 1',
-                        fruits: plan['outside_table_one'] ?? const <String>[],
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: const <Widget>[
-              _LegendChip(
-                label: 'Festival priority',
-                icon: Icons.priority_high_rounded,
-                tint: Color(0xFFFFF0BF),
-              ),
-              _LegendChip(
-                label: 'Fast-move placement',
-                icon: Icons.flash_on_rounded,
-                tint: Color(0xFFEAF5E8),
-              ),
-              _LegendChip(
-                label: 'Bundle placement',
-                icon: Icons.link_rounded,
-                tint: Color(0xFFFFE7BA),
-              ),
-            ],
+          const SizedBox(height: 10),
+          _PlacementZone(
+            title: 'Counter area',
+            icon: Icons.point_of_sale_rounded,
+            suggestions: plan['counter_area'] ?? const <_PlacementSuggestion>[],
           ),
         ],
       ),
@@ -981,128 +915,54 @@ class _PlacementPlanCard extends StatelessWidget {
   }
 }
 
-class _ZoneOverlay extends StatelessWidget {
-  const _ZoneOverlay({
-    required this.left,
-    required this.top,
-    required this.width,
-    required this.title,
-    required this.fruits,
-  });
+class _PlacementSuggestion {
+  const _PlacementSuggestion(this.name, this.reason);
 
-  final double left;
-  final double top;
-  final double width;
-  final String title;
-  final List<String> fruits;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.expand(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Stack(
-            children: <Widget>[
-              Positioned(
-                left: constraints.maxWidth * left,
-                top: constraints.maxHeight * top,
-                width: constraints.maxWidth * width,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.92),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: const Color(0xFF2E2722),
-                      width: 1,
-                    ),
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      if (fruits.isEmpty)
-                        const Text(
-                          'No suggestion',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Color(0xFF8B8179),
-                            fontWeight: FontWeight.w800,
-                          ),
-                        )
-                      else
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: fruits.take(3).map((fruit) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Text(
-                                '${_fruitEmoji(fruit)} $fruit',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
+  final String name;
+  final String reason;
 }
 
-class _LegendChip extends StatelessWidget {
-  const _LegendChip({
-    required this.label,
+class _PlacementZone extends StatelessWidget {
+  const _PlacementZone({
+    required this.title,
     required this.icon,
-    required this.tint,
+    required this.suggestions,
   });
 
-  final String label;
+  final String title;
   final IconData icon;
-  final Color tint;
+  final List<_PlacementSuggestion> suggestions;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: tint,
-        borderRadius: BorderRadius.circular(8),
+        color: const Color(0xFFF8F4EE),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE1D8CE)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(icon, size: 15, color: const Color(0xFF2E2722)),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+          Row(
+            children: <Widget>[
+              Icon(icon, size: 19),
+              const SizedBox(width: 8),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+            ],
           ),
+          const SizedBox(height: 6),
+          if (suggestions.isEmpty)
+            const Text('No placement advice available yet.')
+          else
+            ...suggestions.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('${item.name} — ${item.reason}'),
+              ),
+            ),
         ],
       ),
     );
@@ -1116,15 +976,18 @@ class _FruitBreakdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: fruits.map((fruit) {
-        final name = _field(fruit, 'fruit_name')?.toString() ?? 'Fruit';
-        final stock = _field(fruit, 'stock_label')?.toString() ?? name;
-        final revenue = _field(fruit, 'revenue_label')?.toString() ?? '';
-        final isFestivalPick = _field(fruit, 'is_festival_pick') == true;
-        final isWeatherPick = _field(fruit, 'is_weather_pick') == true;
-
-        return Container(
+    final rows = <Widget>[];
+    for (final fruit in fruits) {
+      final item = _asMap(fruit);
+      final name = _field(fruit, 'fruit_name')?.toString() ?? 'Fruit';
+      final quantity = recommendationQuantityKg(item);
+      if (quantity == null) continue;
+      final revenue = _field(fruit, 'revenue_label')?.toString() ?? '';
+      final isFestivalPick = _field(fruit, 'is_festival_pick') == true;
+      final isWeatherPick = _field(fruit, 'is_weather_pick') == true;
+      final range = recommendationRangeLabel(item, quantity);
+      rows.add(
+        Container(
           margin: const EdgeInsets.only(bottom: 6),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           decoration: BoxDecoration(
@@ -1148,13 +1011,27 @@ class _FruitBreakdown extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  stock,
-                  style: const TextStyle(
-                    color: Color(0xFF2E2722),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Order about ${_kgLabel(quantity)} $name',
+                      style: const TextStyle(
+                        color: Color(0xFF2E2722),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if (range != null)
+                      Text(range, style: const TextStyle(fontSize: 12)),
+                    Text(
+                      forecastConfidenceLabel(item),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               if (revenue.isNotEmpty)
@@ -1168,8 +1045,16 @@ class _FruitBreakdown extends StatelessWidget {
                 ),
             ],
           ),
-        );
-      }).toList(),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: rows.isEmpty
+          ? const <Widget>[
+              Text('No item has reached the 1 kg recommendation minimum.'),
+            ]
+          : rows,
     );
   }
 }
@@ -1201,9 +1086,15 @@ class _EventNote extends StatelessWidget {
 }
 
 class _BundleList extends StatelessWidget {
-  const _BundleList({required this.bundles});
+  const _BundleList({
+    required this.bundles,
+    required this.dismissedKeys,
+    required this.onDismiss,
+  });
 
   final List<dynamic> bundles;
+  final Set<String> dismissedKeys;
+  final ValueChanged<String> onDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -1215,22 +1106,29 @@ class _BundleList extends StatelessWidget {
       );
     }
 
+    final visibleBundles = bundles.where((bundle) {
+      final key = _bundleKey(bundle);
+      return !dismissedKeys.contains(key);
+    }).toList();
+    if (visibleBundles.isEmpty) {
+      return const _EmptyCard(
+        icon: Icons.check_circle_outline_rounded,
+        title: 'No active bundle suggestions',
+        message: 'Dismissed suggestions stay hidden on this device.',
+      );
+    }
     return Column(
-      children: bundles.map((bundle) {
+      children: visibleBundles.map((bundle) {
         final pair1 = _field(bundle, 'pair_1')?.toString() ?? 'Item';
         final pair2 = _field(bundle, 'pair_2')?.toString() ?? 'Item';
         final title = _field(bundle, 'title')?.toString() ?? '$pair1 + $pair2';
-        final confidence = _asInt(_field(bundle, 'confidence_percent'));
         final pairCount = _asInt(_field(bundle, 'pair_count'));
-        final strength =
-            _field(bundle, 'strength')?.toString() ?? 'Bundle idea';
-        final advice =
-            _field(bundle, 'advice')?.toString() ??
-            'Place these items together to make the basket easier to build.';
-        final evidence = pairCount > 0 ? 'Based on $pairCount baskets.' : '';
-        final actionLabel = confidence >= 70
-            ? 'Display together'
-            : 'Test together';
+        final antecedentCount = _asInt(_field(bundle, 'antecedent_count'));
+        final confidenceLabel = bundleConfidenceLabel(pairCount);
+        final key = _bundleKey(bundle);
+        final evidence = antecedentCount > 0
+            ? 'Bought together in $pairCount of $antecedentCount baskets containing $pair1'
+            : 'Bought together $pairCount times';
 
         return Card(
           margin: const EdgeInsets.only(bottom: 10),
@@ -1267,60 +1165,24 @@ class _BundleList extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    actionLabel,
-                    style: const TextStyle(
-                      color: Color(0xFF9A5A00),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                    ),
+                    evidence,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    advice,
-                    style: const TextStyle(
-                      color: Color(0xFF5E534B),
-                      fontWeight: FontWeight.w700,
-                      height: 1.35,
-                    ),
-                  ),
-                  if (evidence.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: 4),
-                    Text(
-                      evidence,
-                      style: const TextStyle(
-                        color: Color(0xFF8B8179),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
+                  const SizedBox(height: 4),
+                  Text('Based on $pairCount baskets'),
                 ],
               ),
             ),
-            trailing: SizedBox(
-              width: 86,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: <Widget>[
-                  Text(
-                    '$confidence%',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    strength,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: Color(0xFF8B8179),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                _StatusChip(label: confidenceLabel),
+                IconButton(
+                  tooltip: 'Dismiss bundle suggestion',
+                  onPressed: () => onDismiss(key),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
             ),
           ),
         );
@@ -1464,113 +1326,71 @@ List<dynamic> _asDynamicList(dynamic value) {
   return <dynamic>[];
 }
 
-Map<String, List<String>> _buildPlacementPlan({
+Map<String, List<_PlacementSuggestion>> _buildPlacementPlan({
   required List<dynamic> forecasts,
   required List<dynamic> bundles,
   required Map<String, dynamic> festivalAdvice,
 }) {
-  final plan = <String, List<String>>{
-    'inside_upper_two': <String>[],
-    'inside_upper_one': <String>[],
-    'inside_counter': <String>[],
-    'outside_table_two': <String>[],
-    'outside_quick_flow': <String>[],
-    'outside_table_one': <String>[],
+  final plan = <String, List<_PlacementSuggestion>>{
+    'front_display': <_PlacementSuggestion>[],
+    'quick_flow': <_PlacementSuggestion>[],
+    'counter_area': <_PlacementSuggestion>[],
   };
 
   final firstForecast = forecasts.isNotEmpty ? forecasts.first : null;
-  final topFruits = _asDynamicList(_field(firstForecast, 'top_fruits'))
-      .map((item) => _field(item, 'fruit_name')?.toString())
-      .whereType<String>()
+  final topRows = _asDynamicList(_field(firstForecast, 'top_fruits'));
+  final topFruits = topRows
+      .whereType<Map>()
+      .map((item) => Map<String, dynamic>.from(item))
+      .where((item) => recommendationQuantityKg(item) != null)
       .toList();
   final festivalFruits = _asStringList(festivalAdvice['recommended_fruits']);
-  final bundleFruits = bundles
-      .take(3)
-      .expand(
-        (bundle) => <String?>[
-          _field(bundle, 'pair_1')?.toString(),
-          _field(bundle, 'pair_2')?.toString(),
-        ],
-      )
-      .whereType<String>()
-      .toList();
-
-  for (final fruit in festivalFruits) {
-    _assignFruitToZone(plan, fruit, festivalPriority: true);
+  for (final fruit in festivalFruits.take(3)) {
+    _addPlacement(plan['front_display']!, fruit, 'Festival priority');
   }
-  for (final fruit in topFruits) {
-    _assignFruitToZone(plan, fruit);
+  for (final row in topFruits) {
+    final fruit = _field(row, 'fruit_name')?.toString();
+    if (fruit == null || festivalFruits.contains(fruit)) continue;
+    final target = plan['front_display']!.length < 3
+        ? plan['front_display']!
+        : plan['counter_area']!;
+    _addPlacement(target, fruit, 'Forecast priority');
   }
-  for (final fruit in bundleFruits) {
-    _assignFruitToZone(plan, fruit, bundlePriority: true);
+  for (final bundle in bundles.take(3)) {
+    final first = _field(bundle, 'pair_1')?.toString();
+    final second = _field(bundle, 'pair_2')?.toString();
+    if (first != null && second != null) {
+      _addPlacement(plan['quick_flow']!, first, 'Pairs with $second');
+      _addPlacement(plan['quick_flow']!, second, 'Pairs with $first');
+    }
   }
 
   return plan;
 }
 
-void _assignFruitToZone(
-  Map<String, List<String>> plan,
-  String fruit, {
-  bool festivalPriority = false,
-  bool bundlePriority = false,
-}) {
-  final lower = fruit.toLowerCase();
-  String zone;
-
-  if (lower.contains('banana')) {
-    zone = 'outside_table_one';
-  } else if (lower.contains('apple') || lower.contains('pomegranate')) {
-    zone = festivalPriority ? 'outside_table_two' : 'inside_upper_two';
-  } else if (lower.contains('orange') || lower.contains('musambi')) {
-    zone = 'outside_table_two';
-  } else if (lower.contains('grape') || lower.contains('guava')) {
-    zone = 'inside_upper_one';
-  } else if (lower.contains('watermelon') ||
-      lower.contains('papaya') ||
-      lower.contains('mango') ||
-      lower.contains('season')) {
-    zone = 'outside_table_two';
-  } else if (bundlePriority) {
-    zone = 'outside_quick_flow';
-  } else {
-    zone = 'inside_counter';
-  }
-
-  final bucket = plan[zone]!;
-  if (!bucket.contains(fruit) && bucket.length < 4) {
-    bucket.add(fruit);
+void _addPlacement(
+  List<_PlacementSuggestion> zone,
+  String fruit,
+  String reason,
+) {
+  if (zone.length < 5 && !zone.any((item) => item.name == fruit)) {
+    zone.add(_PlacementSuggestion(fruit, reason));
   }
 }
 
-String _fruitEmoji(String fruit) {
-  final lower = fruit.toLowerCase();
-  if (lower.contains('apple') || lower.contains('pomegranate')) {
-    return '\u{1F34E}';
-  }
-  if (lower.contains('banana')) {
-    return '\u{1F34C}';
-  }
-  if (lower.contains('orange') || lower.contains('musambi')) {
-    return '\u{1F34A}';
-  }
-  if (lower.contains('grape')) {
-    return '\u{1F347}';
-  }
-  if (lower.contains('watermelon')) {
-    return '\u{1F349}';
-  }
-  if (lower.contains('papaya') || lower.contains('mango')) {
-    return '\u{1F96D}';
-  }
-  if (lower.contains('guava')) {
-    return '\u{1F34D}';
-  }
-  return '\u{1F34F}';
+String _bundleKey(dynamic bundle) {
+  final pair = <String>[
+    _field(bundle, 'pair_1')?.toString().trim().toLowerCase() ?? 'item',
+    _field(bundle, 'pair_2')?.toString().trim().toLowerCase() ?? 'item',
+  ]..sort();
+  return Uri.encodeComponent(pair.join('|'));
 }
 
-String _formatCurrency(int value) {
-  return 'Rs ${value.toString()}';
-}
+Map<String, dynamic> _asMap(dynamic value) =>
+    value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+
+String _kgLabel(double value) =>
+    '${value == value.roundToDouble() ? value.toStringAsFixed(0) : value.toStringAsFixed(1)} kg';
 
 String _formatTimestamp(dynamic value) {
   final parsed = DateTime.tryParse(value.toString());

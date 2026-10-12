@@ -24,6 +24,7 @@ REQUIRED_BUNDLE_KEYS = {
     "lift",
     "pair_count",
     "antecedent_count",
+    "transaction_count",
     "strength",
     "advice",
 }
@@ -239,9 +240,8 @@ def validate_and_standardize_payload(payload: dict[str, Any]) -> tuple[dict[str,
             "confidence_percent": coerce_int(b.get("confidence_percent", 0), default=0),
             "lift": coerce_float(b.get("lift", 0.0), default=0.0),
             "pair_count": coerce_int(b.get("pair_count", 0), default=0),
-            "antecedent_count": coerce_int(
-                b.get("antecedent_count", b.get("antecedent_count", 0)), default=0
-            ),
+            "antecedent_count": coerce_int(b.get("antecedent_count", 0), default=0),
+            "transaction_count": coerce_int(b.get("transaction_count", 0), default=0),
             "strength": str(b.get("strength", "Worth testing")),
             "advice": str(
                 b.get(
@@ -284,9 +284,27 @@ def validate_and_standardize_payload(payload: dict[str, Any]) -> tuple[dict[str,
                 {
                     "fruit_name": str(tf.get("fruit_name", "Fruit")),
                     "suggested_kg": coerce_float(tf.get("suggested_kg", 0.0), default=0.0),
+                    "recommended_order_qty": coerce_float(
+                        tf.get("recommended_order_qty"), default=0.0
+                    )
+                    if _is_number(tf.get("recommended_order_qty"))
+                    else None,
+                    "range_low_kg": coerce_float(tf.get("range_low_kg"), default=0.0)
+                    if _is_number(tf.get("range_low_kg"))
+                    else None,
+                    "range_high_kg": coerce_float(tf.get("range_high_kg"), default=0.0)
+                    if _is_number(tf.get("range_high_kg"))
+                    else None,
                     "expected_revenue": coerce_float(tf.get("expected_revenue", 0.0), default=0.0),
                     "is_festival_pick": bool(tf.get("is_festival_pick", False)),
                     "is_weather_pick": bool(tf.get("is_weather_pick", False)),
+                    "history_days": coerce_int(tf.get("history_days", 0), default=0),
+                    "beats_baseline": tf.get("beats_baseline")
+                    if isinstance(tf.get("beats_baseline"), bool)
+                    else None,
+                    "wape_pct": coerce_float(tf.get("wape_pct"), default=0.0)
+                    if _is_number(tf.get("wape_pct"))
+                    else None,
                     "stock_label": str(tf.get("stock_label", tf.get("fruit_name", "Fruit"))),
                     "revenue_label": str(tf.get("revenue_label", "")),
                 }

@@ -12,6 +12,7 @@ class HiveSalesHelper {
   static const String _priceBoxName = 'last_price_box_secure_v1';
   static const String _catalogBoxName = 'produce_catalog_box_secure_v1';
   static const String _draftKey = 'active_draft';
+  static const String _dismissedBundlePrefix = 'dismissed_insight_bundle_';
   static const String _encryptionKeyName = 'retailflow_hive_encryption_key_v1';
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
@@ -31,10 +32,22 @@ class HiveSalesHelper {
     await Hive.initFlutter();
     final cipher = HiveAesCipher(await _loadEncryptionKey());
     await _migrateLegacyBoxes(cipher);
-    _draftBox = await Hive.openBox<Map>(_draftBoxName, encryptionCipher: cipher);
-    _salesBox = await Hive.openBox<Map>(_salesBoxName, encryptionCipher: cipher);
-    _priceBox = await Hive.openBox<Map>(_priceBoxName, encryptionCipher: cipher);
-    _catalogBox = await Hive.openBox<Map>(_catalogBoxName, encryptionCipher: cipher);
+    _draftBox = await Hive.openBox<Map>(
+      _draftBoxName,
+      encryptionCipher: cipher,
+    );
+    _salesBox = await Hive.openBox<Map>(
+      _salesBoxName,
+      encryptionCipher: cipher,
+    );
+    _priceBox = await Hive.openBox<Map>(
+      _priceBoxName,
+      encryptionCipher: cipher,
+    );
+    _catalogBox = await Hive.openBox<Map>(
+      _catalogBoxName,
+      encryptionCipher: cipher,
+    );
   }
 
   Future<List<int>> _loadEncryptionKey() async {
@@ -48,7 +61,10 @@ class HiveSalesHelper {
     }
 
     final key = Hive.generateSecureKey();
-    await _secureStorage.write(key: _encryptionKeyName, value: base64Encode(key));
+    await _secureStorage.write(
+      key: _encryptionKeyName,
+      value: base64Encode(key),
+    );
     return key;
   }
 
@@ -99,7 +115,7 @@ class HiveSalesHelper {
     // Always reseed the catalog to ensure all fruits are present
     // This fixes issues where Hive may not persist all items correctly
     final existing = _catalogBox.length;
-    
+
     if (existing != defaultCatalog.length) {
       // Clear and reseed if counts don't match
       await _catalogBox.clear();
@@ -386,6 +402,18 @@ class HiveSalesHelper {
 
   int getPendingTransactionCount() {
     return getPendingTransactions().length;
+  }
+
+  Set<String> loadDismissedInsightBundleKeys() => _draftBox.keys
+      .whereType<String>()
+      .where((key) => key.startsWith(_dismissedBundlePrefix))
+      .map((key) => key.substring(_dismissedBundlePrefix.length))
+      .toSet();
+
+  Future<void> dismissInsightBundle(String bundleKey) async {
+    await _draftBox.put('$_dismissedBundlePrefix$bundleKey', <String, dynamic>{
+      'dismissed': true,
+    });
   }
 
   Future<void> markTransactionSynced(String transactionId) async {
