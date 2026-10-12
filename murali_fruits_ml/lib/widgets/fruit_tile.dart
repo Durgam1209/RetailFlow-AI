@@ -138,7 +138,7 @@ class FruitTile extends StatelessWidget {
                                   Text(
                                     'Weight',
                                     style: TextStyle(
-                                      fontSize: 10,
+                                  fontSize: 12,
                                       fontWeight: FontWeight.w700,
                                       color: Color(0xFF7B6F65),
                                     ),
@@ -151,7 +151,7 @@ class FruitTile extends StatelessWidget {
                               Text(
                                 _formatQuantity(quantityKg, displayMetric),
                                 style: const TextStyle(
-                                  fontSize: 13,
+                                fontSize: 16,
                                   fontWeight: FontWeight.w800,
                                   color: Color(0xFF1F1B18),
                                 ),
@@ -179,7 +179,7 @@ class FruitTile extends StatelessWidget {
                                     Text(
                                       'Price/kg',
                                       style: TextStyle(
-                                        fontSize: 10,
+                                        fontSize: 12,
                                         fontWeight: FontWeight.w700,
                                         color: Color(0xFF7B6F65),
                                       ),
@@ -192,7 +192,7 @@ class FruitTile extends StatelessWidget {
                                 Text(
                                   '₹${unitPrice.toStringAsFixed(0)}',
                                   style: const TextStyle(
-                                    fontSize: 13,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.w800,
                                     color: Color(0xFF1F1B18),
                                   ),
@@ -213,7 +213,7 @@ class FruitTile extends StatelessWidget {
                       const Text(
                         'Total',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: Color(0xFF7B6F65),
                         ),
@@ -222,7 +222,7 @@ class FruitTile extends StatelessWidget {
                       Text(
                         '₹${lineTotal.toStringAsFixed(0)}',
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: 16,
                           fontWeight: FontWeight.w900,
                           color: hasQuantity ? palette.primary : const Color(0xFF1F1B18),
                         ),

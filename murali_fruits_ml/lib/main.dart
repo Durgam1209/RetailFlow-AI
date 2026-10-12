@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'data/hive_sales_helper.dart';
 import 'data/supabase_sync_service.dart';
 import 'data/weather_service.dart';
+import 'config/app_config.dart';
 import 'models/fruit_item.dart';
 import 'utils/checkout_validation.dart';
 import 'widgets/fruit_tile.dart';
@@ -91,7 +92,7 @@ class MuraliFruitsApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Murali Fruits',
+      title: shopName,
       theme: ThemeData(
         scaffoldBackgroundColor: const Color(0xFFF7F3EE),
         colorScheme: const ColorScheme.light(
@@ -850,30 +851,7 @@ class _SalesHomePageState extends State<SalesHomePage> {
                                   weatherService: widget.weatherService,
                                 ),
                                 const SizedBox(height: 14),
-                                Row(
-                                  children: <Widget>[
-                                    Expanded(
-                                      child: _SummaryCard(
-                                        label: 'Total Weight',
-                                        value:
-                                            '${_totalQuantity.toStringAsFixed(1)} kg',
-                                        icon: Icons.scale_rounded,
-                                        accent: const Color(0xFFFFE1B6),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: _SummaryCard(
-                                        label: 'Total Amount',
-                                        value:
-                                            'Rs ${_totalAmount.toStringAsFixed(0)}',
-                                        icon: Icons.payments_rounded,
-                                        accent: const Color(0xFFFFC6B8),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 18),
+                                const SizedBox(height: 8),
                                 Container(
                                   decoration: BoxDecoration(
                                     color: Colors.white.withValues(alpha: 0.92),
@@ -1014,7 +992,7 @@ class _SalesHomePageState extends State<SalesHomePage> {
                                 : 1.1;
 
                             return SliverPadding(
-                              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                              padding: const EdgeInsets.fromLTRB(20, 4, 20, 48),
                               sliver: SliverGrid(
                                 gridDelegate:
                                     SliverGridDelegateWithFixedCrossAxisCount(
@@ -1062,6 +1040,7 @@ class _SalesHomePageState extends State<SalesHomePage> {
                           : _finishTransaction,
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF2E2722),
+                        disabledBackgroundColor: const Color(0xFF716860),
                         foregroundColor: Colors.white,
                         textStyle: const TextStyle(
                           fontSize: 16,
@@ -1072,7 +1051,9 @@ class _SalesHomePageState extends State<SalesHomePage> {
                         ),
                       ),
                       icon: const Icon(Icons.receipt_long, size: 24),
-                      label: const Text('Finish Transaction'),
+                      label: Text(
+                        'Finish Transaction · Rs ${_totalAmount.toStringAsFixed(2)}',
+                      ),
                     ),
                   ),
                 ),
@@ -1541,127 +1522,97 @@ class _HeroHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.86),
-        borderRadius: BorderRadius.circular(28),
+        color: Colors.white.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFE7DED2)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        runSpacing: 8,
+        spacing: 10,
         children: <Widget>[
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  todayLabel,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Container(
-                width: 44,
-                height: 44,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: const Color(0xFFF4EFE8),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
                   Icons.storefront_rounded,
-                  size: 24,
+                  size: 23,
                   color: Color(0xFF2E2722),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'Murali Fruits',
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Counter billing for daily sales, fast item edits, and offline-safe syncing for the shop.',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-          ),
-          const SizedBox(height: 16),
-          const Row(
-            children: <Widget>[
-              _MiniProduceIcon(icon: '\u{1F34E}', tint: Color(0xFFFFEEE8)),
-              SizedBox(width: 10),
-              _MiniProduceIcon(icon: '\u{1F34A}', tint: Color(0xFFFFF1E1)),
-              SizedBox(width: 10),
-              _MiniProduceIcon(icon: '\u{1F349}', tint: Color(0xFFEAF5E8)),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Container(
-            constraints: const BoxConstraints(minHeight: 50),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8F4EE),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: statusColor.withValues(alpha: 0.18)),
-            ),
-            child: Row(
-              children: <Widget>[
-                Icon(
-                  isOnline ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
-                  color: statusColor,
-                  size: 28,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    statusText,
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    shopName,
                     style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
-                ),
-                if (syncActionLabel != null) ...<Widget>[
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    height: 44,
-                    child: FilledButton(
-                      onPressed: onSyncTap,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF2E2722),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                      ),
-                      child: Text(
-                        syncActionLabel!,
-                        style: const TextStyle(fontWeight: FontWeight.w900),
-                      ),
+                  Text(
+                    todayLabel,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF5E534B),
                     ),
                   ),
                 ],
+              ),
+            ],
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Container(
+                constraints: const BoxConstraints(maxWidth: 250),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8F4EE),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(
+                      isOnline ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
+                      color: statusColor,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        statusText,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (syncActionLabel != null) ...<Widget>[
+                const SizedBox(width: 4),
+                TextButton(
+                  onPressed: onSyncTap,
+                  style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                  child: Text(syncActionLabel!),
+                ),
               ],
-            ),
+            ],
           ),
         ],
       ),
@@ -2564,63 +2515,3 @@ class _MiniProduceIcon extends StatelessWidget {
   }
 }
 
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.accent,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 96),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.94),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.black, width: 2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: accent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: Colors.black),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-          ),
-        ],
-      ),
-    );
-  }
-}
