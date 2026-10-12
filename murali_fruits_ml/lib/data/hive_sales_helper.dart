@@ -217,6 +217,7 @@ class HiveSalesHelper {
   Future<void> setDraftPrice({
     required FruitItem fruit,
     required double unitPrice,
+    bool saveAsDefault = false,
   }) async {
     if (!unitPrice.isFinite || unitPrice <= 0 || unitPrice > 100000) {
       throw ArgumentError.value(unitPrice, 'unitPrice');
@@ -249,12 +250,14 @@ class HiveSalesHelper {
     draft['items'] = items;
     draft.addAll(_timestampFields('updated', now));
     await _draftBox.put(_draftKey, draft);
-    await _priceBox.put(fruit.id, <String, dynamic>{
-      'fruitId': fruit.id,
-      'fruitName': fruit.name,
-      'price': roundedPrice,
-      ..._timestampFields('updated', now),
-    });
+    if (saveAsDefault) {
+      await _priceBox.put(fruit.id, <String, dynamic>{
+        'fruitId': fruit.id,
+        'fruitName': fruit.name,
+        'price': roundedPrice,
+        ..._timestampFields('updated', now),
+      });
+    }
   }
 
   Future<void> setDraftQuantity({
@@ -322,6 +325,9 @@ class HiveSalesHelper {
       (sum, item) => sum + ((item['lineTotal'] as num?)?.toDouble() ?? 0),
     );
     final itemCount = filteredItems.length;
+    if (itemCount == 0 || totalAmount <= 0) {
+      throw ArgumentError('A sale must contain a positive weight and amount.');
+    }
 
     final transactionData = <String, dynamic>{
       'transactionId': transactionId,
@@ -339,22 +345,28 @@ class HiveSalesHelper {
 
     await _salesBox.put(transactionId, transactionData);
 
-    for (final item in filteredItems) {
-      final fruitId = item['fruitId'] as String?;
-      final fruitName = item['fruitName'] as String?;
-      final unitPrice = (item['unitPrice'] as num?)?.toDouble();
-      if (fruitId != null && unitPrice != null) {
-        await _priceBox.put(fruitId, <String, dynamic>{
-          'fruitId': fruitId,
-          'fruitName': fruitName,
-          'price': unitPrice,
-          ..._timestampFields('updated', timestamp),
-        });
-      }
-    }
-
     await clearDraftSession();
     return transactionId;
+  }
+
+  Future<bool> undoPendingTransaction(String transactionId) async {
+    final transaction = _salesBox.get(transactionId);
+    if (transaction == null || transaction['syncStatus'] == 'synced') {
+      return false;
+    }
+    await _salesBox.delete(transactionId);
+    final items = transaction['items'];
+    await _draftBox.put(_draftKey, <String, dynamic>{
+      'items': items is List
+          ? <String, dynamic>{
+              for (final item in items)
+                if (item is Map && item['fruitId'] is String)
+                  item['fruitId'] as String: Map<String, dynamic>.from(item),
+            }
+          : <String, dynamic>{},
+      ..._timestampFields('updated', DateTime.now()),
+    });
+    return true;
   }
 
   Future<void> clearDraftSession() async {

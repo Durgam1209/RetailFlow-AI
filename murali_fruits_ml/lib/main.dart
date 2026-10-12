@@ -17,6 +17,8 @@ import 'widgets/weather_panel.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
+const double largePriceChangeWarningPercent = 25;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -523,7 +525,7 @@ class _SalesHomePageState extends State<SalesHomePage> {
 
   Future<void> _editPrice(FruitItem fruit) async {
     final currentPrice = _priceFor(fruit);
-    final updatedPrice = await showModalBottomSheet<double>(
+    final result = await showModalBottomSheet<_PriceEditResult>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -534,14 +536,15 @@ class _SalesHomePageState extends State<SalesHomePage> {
       ),
     );
 
-    if (updatedPrice == null) {
+    if (result == null) {
       return;
     }
 
     HapticFeedback.mediumImpact();
     await widget.salesHelper.setDraftPrice(
       fruit: fruit,
-      unitPrice: updatedPrice,
+      unitPrice: result.price,
+      saveAsDefault: result.saveAsDefault,
     );
     if (!mounted) {
       return;
@@ -614,9 +617,22 @@ class _SalesHomePageState extends State<SalesHomePage> {
     });
   }
 
+  Future<void> _retryPendingSync() async {
+    final results = await Connectivity().checkConnectivity();
+    final online = !results.contains(ConnectivityResult.none);
+    if (mounted) {
+      setState(() {
+        _isOnline = online;
+        _pendingSyncCount = widget.salesHelper.getPendingTransactionCount();
+      });
+    }
+    if (online) await _syncPendingSales();
+  }
+
   Future<void> _finishTransaction() async {
     final hasItems = _draftItems.values.any(
-      (item) => ((item['quantityKg'] as num?)?.toDouble() ?? 0) > 0,
+      (item) => ((item['quantityKg'] as num?)?.toDouble() ?? 0) > 0 &&
+          ((item['lineTotal'] as num?)?.toDouble() ?? 0) > 0,
     );
     if (!hasItems) {
       return;
@@ -649,13 +665,43 @@ class _SalesHomePageState extends State<SalesHomePage> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Transaction saved: $transactionId'),
+        content: const Text('Sale saved.'),
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => unawaited(_undoTransaction(transactionId)),
+        ),
       ),
     );
 
-    if (_isOnline) {
+    await Future<void>.delayed(const Duration(seconds: 5));
+    if (mounted && _isOnline &&
+        widget.salesHelper.getPendingTransactions().any(
+          (record) => record['transactionId'] == transactionId,
+        )) {
       unawaited(_syncPendingSales());
+    }
+  }
+
+  Future<void> _undoTransaction(String transactionId) async {
+    final restored = await widget.salesHelper.undoPendingTransaction(transactionId);
+    if (!mounted) return;
+    setState(() {
+      _draftItems = widget.salesHelper.loadDraftSession(_catalog);
+      _pendingSyncCount = widget.salesHelper.getPendingTransactionCount();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(restored ? 'Sale undone. Bill restored.' : 'Sale already synced.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _undoLastItem() async {
+    if (_draftCatalogItems.isNotEmpty) {
+      await _removeDraftLine(_draftCatalogItems.last);
     }
   }
 
@@ -793,9 +839,8 @@ class _SalesHomePageState extends State<SalesHomePage> {
                                   syncActionLabel: _syncActionLabel(),
                                   onSyncTap:
                                       widget.syncService.isConfigured &&
-                                          _isOnline &&
                                           !_isSyncing
-                                      ? _syncPendingSales
+                                      ? _retryPendingSync
                                       : null,
                                 ),
                                 const SizedBox(height: 14),
@@ -946,6 +991,9 @@ class _SalesHomePageState extends State<SalesHomePage> {
                                   onClearAll: _draftCatalogItems.isEmpty
                                       ? null
                                       : _clearCurrentBill,
+                      onUndoLastItem: _draftCatalogItems.isEmpty
+                          ? null
+                          : _undoLastItem,
                                 ),
                               ],
                             ),
@@ -1009,7 +1057,7 @@ class _SalesHomePageState extends State<SalesHomePage> {
                     width: double.infinity,
                     height: 56,
                     child: FilledButton.icon(
-                      onPressed: _draftCatalogItems.isEmpty
+                      onPressed: _draftCatalogItems.isEmpty || _totalAmount <= 0
                           ? null
                           : _finishTransaction,
                       style: FilledButton.styleFrom(
@@ -1070,7 +1118,7 @@ extension on _SalesHomePageState {
     if (_pendingSyncCount > 0) {
       return 'Online: $_pendingSyncCount sale(s) ready to sync.';
     }
-    return _syncMessage ?? 'Online: all sales synced to Supabase.';
+    return _syncMessage ?? 'All sales are already synced';
   }
 
   String? _syncActionLabel() {
@@ -1080,11 +1128,8 @@ extension on _SalesHomePageState {
     if (_isSyncing) {
       return 'Syncing';
     }
-    if (!_isOnline) {
-      return null;
-    }
     if (_pendingSyncCount > 0) {
-      return 'Sync Now';
+      return 'Retry';
     }
     return 'Synced';
   }
@@ -1102,6 +1147,7 @@ class _CurrentBillPanel extends StatelessWidget {
     required this.onEditPrice,
     required this.onRemoveLine,
     required this.onClearAll,
+    required this.onUndoLastItem,
   });
 
   final List<FruitItem> items;
@@ -1114,6 +1160,7 @@ class _CurrentBillPanel extends StatelessWidget {
   final Future<void> Function(FruitItem fruit) onEditPrice;
   final Future<void> Function(FruitItem fruit) onRemoveLine;
   final Future<void> Function()? onClearAll;
+  final Future<void> Function()? onUndoLastItem;
 
   @override
   Widget build(BuildContext context) {
@@ -1134,6 +1181,11 @@ class _CurrentBillPanel extends StatelessWidget {
                   'Current Bill',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
                 ),
+              ),
+              IconButton(
+                tooltip: 'Undo last item',
+                onPressed: onUndoLastItem,
+                icon: const Icon(Icons.undo_rounded),
               ),
               TextButton(
                 onPressed: onClearAll,
@@ -1666,7 +1718,7 @@ class _ProduceEditorSheetState extends State<_ProduceEditorSheet> {
       });
       return;
     }
-    if (!isValidUnitPrice(price)) {
+    if (price == null || !isValidUnitPrice(price)) {
       setState(() {
         _errorText = 'Enter a price above zero and no more than Rs 100,000';
       });
@@ -1884,7 +1936,29 @@ class _PriceEditorSheet extends StatefulWidget {
 
 class _PriceEditorSheetState extends State<_PriceEditorSheet> {
   late final TextEditingController _controller;
+  late final FocusNode _priceFocusNode;
   String? _errorText;
+  bool _saveAsDefault = false;
+  bool _largeChangeConfirmed = false;
+
+  double get _usualPrice => widget.defaultPrice > 0
+      ? widget.defaultPrice
+      : widget.currentPrice;
+
+  double? get _largeChangePercent {
+    final value = double.tryParse(_controller.text.trim());
+    if (value == null || _usualPrice <= 0) return null;
+    final percent = ((value - _usualPrice).abs() / _usualPrice) * 100;
+    return percent > largePriceChangeWarningPercent ? percent : null;
+  }
+
+  String? get _largeChangeMessage {
+    final value = double.tryParse(_controller.text.trim());
+    final percent = _largeChangePercent;
+    if (value == null || percent == null) return null;
+    final direction = value < _usualPrice ? 'below' : 'above';
+    return '${percent.round()}% $direction usual price';
+  }
 
   List<double> get _presets {
     final values = <double>{
@@ -1902,25 +1976,51 @@ class _PriceEditorSheetState extends State<_PriceEditorSheet> {
     _controller = TextEditingController(
       text: _formatEditableNumberValue(widget.currentPrice),
     );
+    _priceFocusNode = FocusNode()
+      ..addListener(() {
+        if (_priceFocusNode.hasFocus) {
+          _controller.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: _controller.text.length,
+          );
+        }
+      });
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _priceFocusNode.dispose();
     super.dispose();
   }
 
   void _submit() {
     final parsed = double.tryParse(_controller.text.trim());
-    if (parsed == null || !parsed.isFinite || parsed <= 0 || parsed > 100000) {
+    if (parsed == null ||
+        !parsed.isFinite ||
+        parsed <= 0 ||
+        parsed > 100000 ||
+        !_hasAtMostTwoDecimals(_controller.text.trim())) {
       setState(() {
         _errorText = 'Enter a price above zero and no more than Rs 100,000';
       });
       return;
     }
 
+    if (_largeChangePercent != null && !_largeChangeConfirmed) {
+      setState(() {
+        _largeChangeConfirmed = true;
+      });
+      return;
+    }
+
     FocusManager.instance.primaryFocus?.unfocus();
-    Navigator.of(context).pop(_roundCurrencyValue(parsed));
+    Navigator.of(context).pop(
+      _PriceEditResult(
+        price: _roundCurrencyValue(parsed),
+        saveAsDefault: _saveAsDefault,
+      ),
+    );
   }
 
   @override
@@ -1958,29 +2058,29 @@ class _PriceEditorSheetState extends State<_PriceEditorSheet> {
                   children: <Widget>[
                     Expanded(
                       child: Text(
-                        'Set ${widget.fruitName} Price',
+                        widget.fruitName,
                         style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF1D9),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.black, width: 1.5),
-                      ),
-                      child: Text(
-                        'Now Rs ${_formatEditableNumberValue(widget.currentPrice)}',
-                        style: const TextStyle(fontWeight: FontWeight.w900),
-                      ),
+                    IconButton(
+                      tooltip: 'Close price editor',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
                     ),
                   ],
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Chip(
+                    label: Text(
+                      'Current price · Rs ${_formatEditableNumberValue(widget.currentPrice)}',
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    backgroundColor: const Color(0xFFFFF1D9),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
@@ -1997,7 +2097,10 @@ class _PriceEditorSheetState extends State<_PriceEditorSheet> {
                     return SizedBox(
                       height: 54,
                       child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(price),
+                        onPressed: () {
+                          _controller.text = _formatEditableNumberValue(price);
+                          setState(() => _largeChangeConfirmed = false);
+                        },
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: Colors.black, width: 2),
                           foregroundColor: Colors.black,
@@ -2019,6 +2122,7 @@ class _PriceEditorSheetState extends State<_PriceEditorSheet> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: _controller,
+                  focusNode: _priceFocusNode,
                   autofocus: true,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
@@ -2029,11 +2133,10 @@ class _PriceEditorSheetState extends State<_PriceEditorSheet> {
                     ),
                   ],
                   onChanged: (_) {
-                    if (_errorText != null) {
-                      setState(() {
-                        _errorText = null;
-                      });
-                    }
+                    setState(() {
+                      _errorText = null;
+                      _largeChangeConfirmed = false;
+                    });
                   },
                   onSubmitted: (_) => _submit(),
                   decoration: InputDecoration(
@@ -2046,6 +2149,43 @@ class _PriceEditorSheetState extends State<_PriceEditorSheet> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(18),
                     ),
+                  ),
+                ),
+                if (_largeChangeMessage != null) ...<Widget>[
+                  const SizedBox(height: 10),
+                  Text(
+                    _largeChangeConfirmed
+                        ? '${_largeChangeMessage!}. Tap Save again to confirm.'
+                        : '${_largeChangeMessage!}. Tap Save once to review, then again to confirm.',
+                    style: TextStyle(
+                      color: _largeChangeConfirmed
+                          ? const Color(0xFF9A5A00)
+                          : const Color(0xFF8A3B12),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                RadioGroup<bool>(
+                  groupValue: _saveAsDefault,
+                  onChanged: (value) {
+                    if (value != null) setState(() => _saveAsDefault = value);
+                  },
+                  child: const Column(
+                    children: <Widget>[
+                      RadioListTile<bool>(
+                        value: false,
+                        title: Text('This bill only'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                      RadioListTile<bool>(
+                        value: true,
+                        title: Text('Save as new default price'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -2061,8 +2201,8 @@ class _PriceEditorSheetState extends State<_PriceEditorSheet> {
                         borderRadius: BorderRadius.circular(18),
                       ),
                     ),
-                    child: const Text(
-                      'Save Price',
+                    child: Text(
+                      _largeChangeConfirmed ? 'Confirm price' : 'Apply price',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
@@ -2087,6 +2227,13 @@ class _WeightEditResult {
 
   final double quantityKg;
   final String displayMetric;
+}
+
+class _PriceEditResult {
+  const _PriceEditResult({required this.price, required this.saveAsDefault});
+
+  final double price;
+  final bool saveAsDefault;
 }
 
 String _uniqueProduceId(String name, Set<String> existingIds) {
@@ -2168,11 +2315,15 @@ class _WeightEditorSheetState extends State<_WeightEditorSheet> {
 
   void _submit() {
     final parsed = double.tryParse(_controller.text.trim());
-    final quantityKg = parsed == null
-        ? null
-        : _convertMetricToKgValue(parsed, _selectedMetric);
-    if (parsed == null || !parsed.isFinite || parsed < 0 ||
-        !isValidCheckoutQuantity(quantityKg)) {
+    if (parsed == null || !parsed.isFinite || parsed < 0) {
+      setState(() {
+        _errorText = 'Enter a weight between 0 and 500 kg';
+      });
+      return;
+    }
+
+    final quantityKg = _convertMetricToKgValue(parsed, _selectedMetric);
+    if (!isValidCheckoutQuantity(quantityKg)) {
       setState(() {
         _errorText = 'Enter a weight between 0 and 500 kg';
       });
@@ -2364,6 +2515,11 @@ String _formatEditableNumberValue(double value) {
   return value.truncateToDouble() == value
       ? value.toStringAsFixed(0)
       : value.toStringAsFixed(2);
+}
+
+bool _hasAtMostTwoDecimals(String value) {
+  final decimalIndex = value.indexOf('.');
+  return decimalIndex < 0 || value.length - decimalIndex - 1 <= 2;
 }
 
 double _convertKgToMetricValue(double quantityKg, String metric) {

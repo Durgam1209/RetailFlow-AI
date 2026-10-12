@@ -256,6 +256,12 @@ class _SummaryPanel extends StatelessWidget {
     final averageRevenue = _averageRevenue(forecasts);
     final peak = _peakForecast(forecasts);
     final topFruit = _topFruitName(peak);
+    final updated = updatedAt == null
+        ? null
+        : DateTime.tryParse(updatedAt.toString())?.toLocal();
+    final age = updated == null ? null : DateTime.now().difference(updated);
+    final isVeryStale = age != null && age > const Duration(hours: 72);
+    final isStale = age != null && age > const Duration(hours: 24);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -373,15 +379,27 @@ class _SummaryPanel extends StatelessWidget {
                 Icon(
                   Icons.access_time_rounded,
                   size: 13,
-                  color: Colors.white.withValues(alpha: 0.6),
+                  color: isVeryStale
+                      ? const Color(0xFFFF8A80)
+                      : isStale
+                      ? const Color(0xFFFFD180)
+                      : Colors.white.withValues(alpha: 0.75),
                 ),
                 const SizedBox(width: 4),
-                Text(
-                  'Updated ${_formatTimestamp(updatedAt)}',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.65),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Text(
+                    isStale
+                        ? 'Insights are ${age.inDays.clamp(1, 999)} days old, advice may be outdated - Updated ${_formatTimestamp(updatedAt)}'
+                        : 'Updated ${_formatTimestamp(updatedAt)}',
+                    style: TextStyle(
+                      color: isVeryStale
+                          ? const Color(0xFFFF8A80)
+                          : isStale
+                          ? const Color(0xFFFFD180)
+                          : Colors.white.withValues(alpha: 0.85),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
