@@ -4,12 +4,14 @@ class SalesSummary {
     required this.dayOfWeek,
     required this.totalRevenue,
     required this.transactionCount,
+    this.averageBillValue = 0,
   });
 
   final DateTime date;
   final String dayOfWeek;
   final double totalRevenue;
   final int transactionCount;
+  final double averageBillValue;
 
   factory SalesSummary.fromMap(Map<String, dynamic> map) {
     return SalesSummary(
@@ -17,6 +19,7 @@ class SalesSummary {
       dayOfWeek: map['day_of_week']?.toString() ?? '',
       totalRevenue: (map['total_revenue'] as num?)?.toDouble() ?? 0,
       transactionCount: (map['total_transactions'] as num?)?.toInt() ?? 0,
+      averageBillValue: (map['average_bill_value'] as num?)?.toDouble() ?? 0,
     );
   }
 

@@ -17,6 +17,7 @@ dependencies:
   supabase_flutter: ^2.12.0
   http: ^1.1.0
   fl_chart: ^1.2.0
+  intl: ^0.20.3
 
 dev_dependencies:
   flutter_test:
